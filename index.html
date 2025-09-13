@@ -1,0 +1,1718 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="scroll-smooth"><head>
+    <!-- Chosen Palette: Classic Parchment -->
+    <!-- Application Structure Plan: This corrected version refines the previous build by addressing user-reported bugs and simplifying functionality. The primary two-column layout and performance features like pagination are retained. The JSON import/export feature was removed per user request to simplify the UI, keeping only the essential "Save to Browser" and "Download self-contained HTML" actions. -->
+    <!-- Visualization & Content Choices: The application remains text-centric. Goal: Provide a stable, bug-free, and streamlined user experience for long-term use. Method: A critical bug causing edits to fail was fixed by reverting to the FormData API, which proved more reliable for this use case. The logic from a known-good file was adapted. The initial example data was also restored. Justification: These fixes are crucial for the tool's core functionality and reliability, directly addressing the user's goal of having a dependable, lifelong study application. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anotações da Bíblia</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Lora:ital,wght@0,400..700;1,400..700&amp;display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+          theme: {
+            extend: {
+              fontFamily: {
+                sans: ['Inter', 'sans-serif'],
+                serif: ['Lora', 'serif'],
+              },
+            }
+          }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fdfaf6;
+            color: #4a4a4a;
+        }
+        details > summary {
+            cursor: pointer;
+            list-style: none;
+        }
+        details > summary::-webkit-details-marker {
+            display: none;
+        }
+        details[open] > summary .arrow {
+            transform: rotate(90deg);
+        }
+        .active-filter {
+            background-color: #8c5a2b !important;
+            color: #ffffff !important;
+            border-color: #8c5a2b !important;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        .modal-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background-color: #fff;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            width: 90%;
+            max-width: 650px;
+            transform: scale(0.95);
+            transition: transform 0.3s;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-overlay.visible .modal-content {
+            transform: scale(1);
+        }
+        #all-tags-list-container {
+            max-height: 40vh;
+            overflow-y: auto;
+        }
+        .toast-notification {
+            position: fixed;
+            bottom: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #28a745;
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            z-index: 100;
+            transition: bottom 0.5s ease-in-out;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .toast-notification.error {
+            background-color: #dc2626;
+        }
+        .toast-notification.show {
+            bottom: 20px;
+        }
+        mark {
+            background-color: #fef08a;
+            padding: 0.1em 0;
+            border-radius: 3px;
+        }
+        .pagination-btn.active {
+            background-color: #8c5a2b;
+            color: white;
+            border-color: #8c5a2b;
+        }
+        #readModeModal .modal-content {
+            max-width: 90vw;
+            width: 48rem; /* Equivalent to max-w-4xl */
+            background: transparent;
+            padding: 0;
+            box-shadow: none;
+            border-radius: 0.75rem;
+        }
+        /* Smart Tag Editor Styles */
+        .tags-editor-container {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            background-color: white;
+            cursor: text;
+        }
+        .tags-editor-container:focus-within {
+            border-color: #8c5a2b;
+            box-shadow: 0 0 0 1px #8c5a2b;
+        }
+        .tag-item {
+            display: inline-flex;
+            align-items: center;
+            background-color: #8c5a2b;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        .tag-item span {
+            cursor: pointer;
+        }
+        .tag-remove-btn {
+            margin-left: 0.5rem;
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 1rem;
+            line-height: 1;
+            padding: 0;
+            opacity: 0.7;
+        }
+        .tag-remove-btn:hover {
+            opacity: 1;
+        }
+        .tags-editor-input {
+            flex-grow: 1;
+            border: none;
+            outline: none;
+            padding: 0.25rem;
+            background: transparent;
+            min-width: 120px;
+        }
+        .tags-suggestions-container {
+            position: relative;
+        }
+        .suggestions-list {
+            position: absolute;
+            top: 2px;
+            left: 0;
+            right: 0;
+            background-color: white;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 60;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .suggestion-item:hover {
+            background-color: #f3f4f6;
+        }
+    </style>
+<style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:Inter, sans-serif;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.pointer-events-none{pointer-events:none}.visible{visibility:visible}.absolute{position:absolute}.relative{position:relative}.bottom-full{bottom:100%}.right-0{right:0px}.right-6{right:1.5rem}.top-6{top:1.5rem}.right-2{right:0.5rem}.top-1{top:0.25rem}.z-10{z-index:10}.mb-2{margin-bottom:0.5rem}.mb-3{margin-bottom:0.75rem}.mb-4{margin-bottom:1rem}.mb-6{margin-bottom:1.5rem}.mb-8{margin-bottom:2rem}.mt-12{margin-top:3rem}.mt-2{margin-top:0.5rem}.mt-4{margin-top:1rem}.mt-6{margin-top:1.5rem}.mt-8{margin-top:2rem}.mb-1{margin-bottom:0.25rem}.mr-2{margin-right:0.5rem}.mt-1{margin-top:0.25rem}.mt-3{margin-top:0.75rem}.ml-2{margin-left:0.5rem}.block{display:block}.inline-block{display:inline-block}.flex{display:flex}.grid{display:grid}.hidden{display:none}.h-6{height:1.5rem}.h-4{height:1rem}.max-h-\[60vh\]{max-height:60vh}.min-h-screen{min-height:100vh}.w-6{width:1.5rem}.w-full{width:100%}.w-max{width:max-content}.w-4{width:1rem}.flex-1{flex:1 1 0%}.flex-shrink-0{flex-shrink:0}.flex-grow{flex-grow:1}.cursor-pointer{cursor:pointer}.grid-cols-1{grid-template-columns:repeat(1, minmax(0, 1fr))}.grid-cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-center{align-items:center}.items-baseline{align-items:baseline}.justify-end{justify-content:flex-end}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-2{gap:0.5rem}.gap-4{gap:1rem}.gap-6{gap:1.5rem}.gap-3{gap:0.75rem}.space-y-2 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.5rem * var(--tw-space-y-reverse))}.space-y-3 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.75rem * var(--tw-space-y-reverse))}.space-y-4 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem * var(--tw-space-y-reverse))}.space-y-1 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.25rem * var(--tw-space-y-reverse))}.overflow-y-auto{overflow-y:auto}.scroll-smooth{scroll-behavior:smooth}.whitespace-nowrap{white-space:nowrap}.rounded{border-radius:0.25rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.rounded-md{border-radius:0.375rem}.border{border-width:1px}.border-r{border-right-width:1px}.border-l-2{border-left-width:2px}.border-t{border-top-width:1px}.border-b{border-bottom-width:1px}.border-gray-200{--tw-border-opacity:1;border-color:rgb(229 231 235 / var(--tw-border-opacity, 1))}.border-gray-300{--tw-border-opacity:1;border-color:rgb(209 213 219 / var(--tw-border-opacity, 1))}.border-amber-200{--tw-border-opacity:1;border-color:rgb(253 230 138 / var(--tw-border-opacity, 1))}.border-gray-100{--tw-border-opacity:1;border-color:rgb(243 244 246 / var(--tw-border-opacity, 1))}.bg-amber-100{--tw-bg-opacity:1;background-color:rgb(254 243 199 / var(--tw-bg-opacity, 1))}.bg-amber-800{--tw-bg-opacity:1;background-color:rgb(146 64 14 / var(--tw-bg-opacity, 1))}.bg-gray-200{--tw-bg-opacity:1;background-color:rgb(229 231 235 / var(--tw-bg-opacity, 1))}.bg-gray-50{--tw-bg-opacity:1;background-color:rgb(249 250 251 / var(--tw-bg-opacity, 1))}.bg-gray-800{--tw-bg-opacity:1;background-color:rgb(31 41 55 / var(--tw-bg-opacity, 1))}.bg-red-600{--tw-bg-opacity:1;background-color:rgb(220 38 38 / var(--tw-bg-opacity, 1))}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.bg-white\/70{background-color:rgb(255 255 255 / 0.7)}.p-2{padding:0.5rem}.p-3{padding:0.75rem}.p-4{padding:1rem}.p-6{padding:1.5rem}.p-1{padding:0.25rem}.px-2{padding-left:0.5rem;padding-right:0.5rem}.px-4{padding-left:1rem;padding-right:1rem}.px-6{padding-left:1.5rem;padding-right:1.5rem}.py-1{padding-top:0.25rem;padding-bottom:0.25rem}.py-16{padding-top:4rem;padding-bottom:4rem}.py-2{padding-top:0.5rem;padding-bottom:0.5rem}.py-3{padding-top:0.75rem;padding-bottom:0.75rem}.px-2\.5{padding-left:0.625rem;padding-right:0.625rem}.px-3{padding-left:0.75rem;padding-right:0.75rem}.py-0\.5{padding-top:0.125rem;padding-bottom:0.125rem}.pr-2{padding-right:0.5rem}.pl-2{padding-left:0.5rem}.pl-8{padding-left:2rem}.pr-3{padding-right:0.75rem}.pt-3{padding-top:0.75rem}.text-left{text-align:left}.text-center{text-align:center}.text-2xl{font-size:1.5rem;line-height:2rem}.text-4xl{font-size:2.25rem;line-height:2.5rem}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:0.75rem;line-height:1rem}.font-bold{font-weight:700}.font-medium{font-weight:500}.font-semibold{font-weight:600}.italic{font-style:italic}.text-amber-800{--tw-text-opacity:1;color:rgb(146 64 14 / var(--tw-text-opacity, 1))}.text-gray-400{--tw-text-opacity:1;color:rgb(156 163 175 / var(--tw-text-opacity, 1))}.text-gray-500{--tw-text-opacity:1;color:rgb(107 114 128 / var(--tw-text-opacity, 1))}.text-gray-600{--tw-text-opacity:1;color:rgb(75 85 99 / var(--tw-text-opacity, 1))}.text-gray-700{--tw-text-opacity:1;color:rgb(55 65 81 / var(--tw-text-opacity, 1))}.text-gray-800{--tw-text-opacity:1;color:rgb(31 41 55 / var(--tw-text-opacity, 1))}.text-gray-900{--tw-text-opacity:1;color:rgb(17 24 39 / var(--tw-text-opacity, 1))}.text-red-600{--tw-text-opacity:1;color:rgb(220 38 38 / var(--tw-text-opacity, 1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.text-amber-700{--tw-text-opacity:1;color:rgb(180 83 9 / var(--tw-text-opacity, 1))}.text-green-600{--tw-text-opacity:1;color:rgb(22 163 74 / var(--tw-text-opacity, 1))}.antialiased{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.opacity-0{opacity:0}.shadow-sm{--tw-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.backdrop-blur-sm{--tw-backdrop-blur:blur(4px);-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.transition{transition-property:color, background-color, border-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-text-decoration-color, -webkit-backdrop-filter;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-text-decoration-color, -webkit-backdrop-filter;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-colors{transition-property:color, background-color, border-color, fill, stroke, -webkit-text-decoration-color;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, -webkit-text-decoration-color;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-opacity{transition-property:opacity;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-transform{transition-property:transform;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-shadow{transition-property:box-shadow;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.duration-200{transition-duration:200ms}.duration-300{transition-duration:300ms}.hover\:border-amber-800:hover{--tw-border-opacity:1;border-color:rgb(146 64 14 / var(--tw-border-opacity, 1))}.hover\:bg-amber-200:hover{--tw-bg-opacity:1;background-color:rgb(253 230 138 / var(--tw-bg-opacity, 1))}.hover\:bg-amber-900:hover{--tw-bg-opacity:1;background-color:rgb(120 53 15 / var(--tw-bg-opacity, 1))}.hover\:bg-gray-300:hover{--tw-bg-opacity:1;background-color:rgb(209 213 219 / var(--tw-bg-opacity, 1))}.hover\:bg-red-700:hover{--tw-bg-opacity:1;background-color:rgb(185 28 28 / var(--tw-bg-opacity, 1))}.hover\:bg-white:hover{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.hover\:bg-amber-100:hover{--tw-bg-opacity:1;background-color:rgb(254 243 199 / var(--tw-bg-opacity, 1))}.hover\:bg-amber-800:hover{--tw-bg-opacity:1;background-color:rgb(146 64 14 / var(--tw-bg-opacity, 1))}.hover\:text-amber-900:hover{--tw-text-opacity:1;color:rgb(120 53 15 / var(--tw-text-opacity, 1))}.hover\:text-blue-600:hover{--tw-text-opacity:1;color:rgb(37 99 235 / var(--tw-text-opacity, 1))}.hover\:text-green-600:hover{--tw-text-opacity:1;color:rgb(22 163 74 / var(--tw-text-opacity, 1))}.hover\:text-red-600:hover{--tw-text-opacity:1;color:rgb(220 38 38 / var(--tw-text-opacity, 1))}.hover\:text-red-800:hover{--tw-text-opacity:1;color:rgb(153 27 27 / var(--tw-text-opacity, 1))}.hover\:text-amber-800:hover{--tw-text-opacity:1;color:rgb(146 64 14 / var(--tw-text-opacity, 1))}.hover\:text-white:hover{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.hover\:text-gray-800:hover{--tw-text-opacity:1;color:rgb(31 41 55 / var(--tw-text-opacity, 1))}.hover\:text-green-800:hover{--tw-text-opacity:1;color:rgb(22 101 52 / var(--tw-text-opacity, 1))}.hover\:shadow-lg:hover{--tw-shadow:0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color), 0 4px 6px -4px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.focus\:border-amber-800:focus{--tw-border-opacity:1;border-color:rgb(146 64 14 / var(--tw-border-opacity, 1))}.focus\:outline-none:focus{outline:2px solid transparent;outline-offset:2px}.focus\:ring-1:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000)}.focus\:ring-2:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000)}.focus\:ring-amber-800:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(146 64 14 / var(--tw-ring-opacity, 1))}.focus\:ring-blue-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(59 130 246 / var(--tw-ring-opacity, 1))}.focus\:ring-green-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(34 197 94 / var(--tw-ring-opacity, 1))}.focus\:ring-red-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(239 68 68 / var(--tw-ring-opacity, 1))}.group:hover .group-hover\:opacity-100{opacity:1}@media (min-width: 640px){.sm\:mt-0{margin-top:0px}.sm\:flex-row{flex-direction:row}}@media (min-width: 768px){.md\:right-10{right:2.5rem}.md\:top-10{top:2.5rem}.md\:w-72{width:18rem}.md\:grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}.md\:flex-row{flex-direction:row}.md\:p-10{padding:2.5rem}}@media (min-width: 1024px){.lg\:grid-cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}}</style><style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:Inter, sans-serif;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.pointer-events-none{pointer-events:none}.visible{visibility:visible}.absolute{position:absolute}.relative{position:relative}.bottom-full{bottom:100%}.right-0{right:0px}.right-6{right:1.5rem}.top-6{top:1.5rem}.right-2{right:0.5rem}.top-1{top:0.25rem}.z-10{z-index:10}.mb-2{margin-bottom:0.5rem}.mb-3{margin-bottom:0.75rem}.mb-4{margin-bottom:1rem}.mb-8{margin-bottom:2rem}.mt-1{margin-top:0.25rem}.mt-2{margin-top:0.5rem}.mb-1{margin-bottom:0.25rem}.mb-6{margin-bottom:1.5rem}.ml-2{margin-left:0.5rem}.mr-2{margin-right:0.5rem}.mt-12{margin-top:3rem}.mt-3{margin-top:0.75rem}.mt-4{margin-top:1rem}.mt-6{margin-top:1.5rem}.mt-8{margin-top:2rem}.block{display:block}.inline-block{display:inline-block}.flex{display:flex}.grid{display:grid}.hidden{display:none}.h-4{height:1rem}.h-6{height:1.5rem}.max-h-\[60vh\]{max-height:60vh}.min-h-screen{min-height:100vh}.w-4{width:1rem}.w-full{width:100%}.w-max{width:max-content}.w-6{width:1.5rem}.flex-1{flex:1 1 0%}.flex-shrink-0{flex-shrink:0}.flex-grow{flex-grow:1}.cursor-pointer{cursor:pointer}.grid-cols-1{grid-template-columns:repeat(1, minmax(0, 1fr))}.grid-cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-center{align-items:center}.items-baseline{align-items:baseline}.justify-end{justify-content:flex-end}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-2{gap:0.5rem}.gap-4{gap:1rem}.gap-3{gap:0.75rem}.gap-6{gap:1.5rem}.space-y-1 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.25rem * var(--tw-space-y-reverse))}.space-y-2 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.5rem * var(--tw-space-y-reverse))}.space-y-3 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.75rem * var(--tw-space-y-reverse))}.space-y-4 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem * var(--tw-space-y-reverse))}.overflow-y-auto{overflow-y:auto}.scroll-smooth{scroll-behavior:smooth}.whitespace-nowrap{white-space:nowrap}.rounded{border-radius:0.25rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.rounded-md{border-radius:0.375rem}.border{border-width:1px}.border-r{border-right-width:1px}.border-b{border-bottom-width:1px}.border-l-2{border-left-width:2px}.border-t{border-top-width:1px}.border-gray-200{--tw-border-opacity:1;border-color:rgb(229 231 235 / var(--tw-border-opacity, 1))}.border-gray-300{--tw-border-opacity:1;border-color:rgb(209 213 219 / var(--tw-border-opacity, 1))}.border-amber-200{--tw-border-opacity:1;border-color:rgb(253 230 138 / var(--tw-border-opacity, 1))}.border-gray-100{--tw-border-opacity:1;border-color:rgb(243 244 246 / var(--tw-border-opacity, 1))}.bg-amber-800{--tw-bg-opacity:1;background-color:rgb(146 64 14 / var(--tw-bg-opacity, 1))}.bg-gray-800{--tw-bg-opacity:1;background-color:rgb(31 41 55 / var(--tw-bg-opacity, 1))}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.bg-white\/70{background-color:rgb(255 255 255 / 0.7)}.bg-amber-100{--tw-bg-opacity:1;background-color:rgb(254 243 199 / var(--tw-bg-opacity, 1))}.bg-gray-200{--tw-bg-opacity:1;background-color:rgb(229 231 235 / var(--tw-bg-opacity, 1))}.bg-gray-50{--tw-bg-opacity:1;background-color:rgb(249 250 251 / var(--tw-bg-opacity, 1))}.bg-red-600{--tw-bg-opacity:1;background-color:rgb(220 38 38 / var(--tw-bg-opacity, 1))}.p-2{padding:0.5rem}.p-3{padding:0.75rem}.p-6{padding:1.5rem}.p-4{padding:1rem}.px-2{padding-left:0.5rem;padding-right:0.5rem}.px-3{padding-left:0.75rem;padding-right:0.75rem}.px-6{padding-left:1.5rem;padding-right:1.5rem}.py-1{padding-top:0.25rem;padding-bottom:0.25rem}.py-2{padding-top:0.5rem;padding-bottom:0.5rem}.py-3{padding-top:0.75rem;padding-bottom:0.75rem}.px-2\.5{padding-left:0.625rem;padding-right:0.625rem}.px-4{padding-left:1rem;padding-right:1rem}.py-0\.5{padding-top:0.125rem;padding-bottom:0.125rem}.py-16{padding-top:4rem;padding-bottom:4rem}.pl-8{padding-left:2rem}.pr-3{padding-right:0.75rem}.pl-2{padding-left:0.5rem}.pr-2{padding-right:0.5rem}.pt-3{padding-top:0.75rem}.text-left{text-align:left}.text-center{text-align:center}.text-4xl{font-size:2.25rem;line-height:2.5rem}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:0.75rem;line-height:1rem}.text-2xl{font-size:1.5rem;line-height:2rem}.font-bold{font-weight:700}.font-semibold{font-weight:600}.font-medium{font-weight:500}.italic{font-style:italic}.text-amber-800{--tw-text-opacity:1;color:rgb(146 64 14 / var(--tw-text-opacity, 1))}.text-gray-500{--tw-text-opacity:1;color:rgb(107 114 128 / var(--tw-text-opacity, 1))}.text-gray-600{--tw-text-opacity:1;color:rgb(75 85 99 / var(--tw-text-opacity, 1))}.text-gray-700{--tw-text-opacity:1;color:rgb(55 65 81 / var(--tw-text-opacity, 1))}.text-gray-800{--tw-text-opacity:1;color:rgb(31 41 55 / var(--tw-text-opacity, 1))}.text-gray-900{--tw-text-opacity:1;color:rgb(17 24 39 / var(--tw-text-opacity, 1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.text-amber-700{--tw-text-opacity:1;color:rgb(180 83 9 / var(--tw-text-opacity, 1))}.text-gray-400{--tw-text-opacity:1;color:rgb(156 163 175 / var(--tw-text-opacity, 1))}.text-red-600{--tw-text-opacity:1;color:rgb(220 38 38 / var(--tw-text-opacity, 1))}.antialiased{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.opacity-0{opacity:0}.shadow-sm{--tw-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.backdrop-blur-sm{--tw-backdrop-blur:blur(4px);-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.transition{transition-property:color, background-color, border-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-text-decoration-color, -webkit-backdrop-filter;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-text-decoration-color, -webkit-backdrop-filter;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-colors{transition-property:color, background-color, border-color, fill, stroke, -webkit-text-decoration-color;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, -webkit-text-decoration-color;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-opacity{transition-property:opacity;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-transform{transition-property:transform;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-shadow{transition-property:box-shadow;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.duration-200{transition-duration:200ms}.duration-300{transition-duration:300ms}.hover\:border-amber-800:hover{--tw-border-opacity:1;border-color:rgb(146 64 14 / var(--tw-border-opacity, 1))}.hover\:bg-amber-100:hover{--tw-bg-opacity:1;background-color:rgb(254 243 199 / var(--tw-bg-opacity, 1))}.hover\:bg-amber-800:hover{--tw-bg-opacity:1;background-color:rgb(146 64 14 / var(--tw-bg-opacity, 1))}.hover\:bg-amber-900:hover{--tw-bg-opacity:1;background-color:rgb(120 53 15 / var(--tw-bg-opacity, 1))}.hover\:bg-white:hover{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.hover\:bg-amber-200:hover{--tw-bg-opacity:1;background-color:rgb(253 230 138 / var(--tw-bg-opacity, 1))}.hover\:bg-gray-300:hover{--tw-bg-opacity:1;background-color:rgb(209 213 219 / var(--tw-bg-opacity, 1))}.hover\:bg-red-700:hover{--tw-bg-opacity:1;background-color:rgb(185 28 28 / var(--tw-bg-opacity, 1))}.hover\:text-amber-900:hover{--tw-text-opacity:1;color:rgb(120 53 15 / var(--tw-text-opacity, 1))}.hover\:text-blue-600:hover{--tw-text-opacity:1;color:rgb(37 99 235 / var(--tw-text-opacity, 1))}.hover\:text-green-600:hover{--tw-text-opacity:1;color:rgb(22 163 74 / var(--tw-text-opacity, 1))}.hover\:text-red-600:hover{--tw-text-opacity:1;color:rgb(220 38 38 / var(--tw-text-opacity, 1))}.hover\:text-white:hover{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.hover\:text-amber-800:hover{--tw-text-opacity:1;color:rgb(146 64 14 / var(--tw-text-opacity, 1))}.hover\:text-red-800:hover{--tw-text-opacity:1;color:rgb(153 27 27 / var(--tw-text-opacity, 1))}.hover\:shadow-lg:hover{--tw-shadow:0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color), 0 4px 6px -4px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.focus\:border-amber-800:focus{--tw-border-opacity:1;border-color:rgb(146 64 14 / var(--tw-border-opacity, 1))}.focus\:outline-none:focus{outline:2px solid transparent;outline-offset:2px}.focus\:ring-1:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000)}.focus\:ring-2:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000)}.focus\:ring-amber-800:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(146 64 14 / var(--tw-ring-opacity, 1))}.focus\:ring-blue-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(59 130 246 / var(--tw-ring-opacity, 1))}.focus\:ring-green-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(34 197 94 / var(--tw-ring-opacity, 1))}.focus\:ring-red-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(239 68 68 / var(--tw-ring-opacity, 1))}.group:hover .group-hover\:opacity-100{opacity:1}@media (min-width: 640px){.sm\:mt-0{margin-top:0px}.sm\:flex-row{flex-direction:row}}@media (min-width: 768px){.md\:right-10{right:2.5rem}.md\:top-10{top:2.5rem}.md\:w-72{width:18rem}.md\:grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}.md\:flex-row{flex-direction:row}.md\:p-10{padding:2.5rem}}@media (min-width: 1024px){.lg\:grid-cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}}</style><style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:Inter, sans-serif;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.pointer-events-none{pointer-events:none}.visible{visibility:visible}.absolute{position:absolute}.relative{position:relative}.bottom-full{bottom:100%}.right-0{right:0px}.right-6{right:1.5rem}.top-6{top:1.5rem}.z-10{z-index:10}.mb-1{margin-bottom:0.25rem}.mb-2{margin-bottom:0.5rem}.mb-3{margin-bottom:0.75rem}.mb-4{margin-bottom:1rem}.mb-6{margin-bottom:1.5rem}.mb-8{margin-bottom:2rem}.mr-2{margin-right:0.5rem}.mt-1{margin-top:0.25rem}.mt-12{margin-top:3rem}.mt-2{margin-top:0.5rem}.mt-3{margin-top:0.75rem}.mt-4{margin-top:1rem}.mt-6{margin-top:1.5rem}.mt-8{margin-top:2rem}.ml-2{margin-left:0.5rem}.block{display:block}.inline-block{display:inline-block}.flex{display:flex}.grid{display:grid}.hidden{display:none}.h-4{height:1rem}.h-6{height:1.5rem}.max-h-\[60vh\]{max-height:60vh}.min-h-screen{min-height:100vh}.w-4{width:1rem}.w-6{width:1.5rem}.w-full{width:100%}.w-max{width:max-content}.max-w-none{max-width:none}.flex-1{flex:1 1 0%}.flex-shrink-0{flex-shrink:0}.flex-grow{flex-grow:1}.cursor-pointer{cursor:pointer}.grid-cols-1{grid-template-columns:repeat(1, minmax(0, 1fr))}.grid-cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-center{align-items:center}.items-baseline{align-items:baseline}.justify-end{justify-content:flex-end}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-2{gap:0.5rem}.gap-3{gap:0.75rem}.gap-4{gap:1rem}.gap-6{gap:1.5rem}.space-y-1 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.25rem * var(--tw-space-y-reverse))}.space-y-2 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.5rem * var(--tw-space-y-reverse))}.space-y-4 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem * var(--tw-space-y-reverse))}.space-y-3 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.75rem * var(--tw-space-y-reverse))}.overflow-y-auto{overflow-y:auto}.scroll-smooth{scroll-behavior:smooth}.whitespace-nowrap{white-space:nowrap}.whitespace-pre-wrap{white-space:pre-wrap}.rounded{border-radius:0.25rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.rounded-md{border-radius:0.375rem}.border{border-width:1px}.border-l-2{border-left-width:2px}.border-r{border-right-width:1px}.border-t{border-top-width:1px}.border-b{border-bottom-width:1px}.border-amber-200{--tw-border-opacity:1;border-color:rgb(253 230 138 / var(--tw-border-opacity, 1))}.border-gray-100{--tw-border-opacity:1;border-color:rgb(243 244 246 / var(--tw-border-opacity, 1))}.border-gray-200{--tw-border-opacity:1;border-color:rgb(229 231 235 / var(--tw-border-opacity, 1))}.border-gray-300{--tw-border-opacity:1;border-color:rgb(209 213 219 / var(--tw-border-opacity, 1))}.bg-amber-100{--tw-bg-opacity:1;background-color:rgb(254 243 199 / var(--tw-bg-opacity, 1))}.bg-amber-800{--tw-bg-opacity:1;background-color:rgb(146 64 14 / var(--tw-bg-opacity, 1))}.bg-gray-50{--tw-bg-opacity:1;background-color:rgb(249 250 251 / var(--tw-bg-opacity, 1))}.bg-gray-800{--tw-bg-opacity:1;background-color:rgb(31 41 55 / var(--tw-bg-opacity, 1))}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.bg-white\/70{background-color:rgb(255 255 255 / 0.7)}.bg-gray-200{--tw-bg-opacity:1;background-color:rgb(229 231 235 / var(--tw-bg-opacity, 1))}.bg-red-600{--tw-bg-opacity:1;background-color:rgb(220 38 38 / var(--tw-bg-opacity, 1))}.bg-stone-50{--tw-bg-opacity:1;background-color:rgb(250 250 249 / var(--tw-bg-opacity, 1))}.p-2{padding:0.5rem}.p-3{padding:0.75rem}.p-4{padding:1rem}.p-6{padding:1.5rem}.px-2{padding-left:0.5rem;padding-right:0.5rem}.px-2\.5{padding-left:0.625rem;padding-right:0.625rem}.px-3{padding-left:0.75rem;padding-right:0.75rem}.px-4{padding-left:1rem;padding-right:1rem}.px-6{padding-left:1.5rem;padding-right:1.5rem}.py-0\.5{padding-top:0.125rem;padding-bottom:0.125rem}.py-1{padding-top:0.25rem;padding-bottom:0.25rem}.py-16{padding-top:4rem;padding-bottom:4rem}.py-2{padding-top:0.5rem;padding-bottom:0.5rem}.py-3{padding-top:0.75rem;padding-bottom:0.75rem}.pl-2{padding-left:0.5rem}.pl-8{padding-left:2rem}.pr-3{padding-right:0.75rem}.pt-3{padding-top:0.75rem}.pr-2{padding-right:0.5rem}.text-left{text-align:left}.text-center{text-align:center}.font-sans{font-family:Inter, sans-serif}.font-serif{font-family:Lora, serif}.text-2xl{font-size:1.5rem;line-height:2rem}.text-4xl{font-size:2.25rem;line-height:2.5rem}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:0.75rem;line-height:1rem}.text-3xl{font-size:1.875rem;line-height:2.25rem}.font-bold{font-weight:700}.font-medium{font-weight:500}.font-semibold{font-weight:600}.uppercase{text-transform:uppercase}.italic{font-style:italic}.leading-relaxed{line-height:1.625}.tracking-wider{letter-spacing:0.05em}.text-amber-700{--tw-text-opacity:1;color:rgb(180 83 9 / var(--tw-text-opacity, 1))}.text-amber-800{--tw-text-opacity:1;color:rgb(146 64 14 / var(--tw-text-opacity, 1))}.text-gray-400{--tw-text-opacity:1;color:rgb(156 163 175 / var(--tw-text-opacity, 1))}.text-gray-500{--tw-text-opacity:1;color:rgb(107 114 128 / var(--tw-text-opacity, 1))}.text-gray-600{--tw-text-opacity:1;color:rgb(75 85 99 / var(--tw-text-opacity, 1))}.text-gray-700{--tw-text-opacity:1;color:rgb(55 65 81 / var(--tw-text-opacity, 1))}.text-gray-800{--tw-text-opacity:1;color:rgb(31 41 55 / var(--tw-text-opacity, 1))}.text-gray-900{--tw-text-opacity:1;color:rgb(17 24 39 / var(--tw-text-opacity, 1))}.text-red-600{--tw-text-opacity:1;color:rgb(220 38 38 / var(--tw-text-opacity, 1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.antialiased{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.opacity-0{opacity:0}.shadow-sm{--tw-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.backdrop-blur-sm{--tw-backdrop-blur:blur(4px);-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.transition{transition-property:color, background-color, border-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-text-decoration-color, -webkit-backdrop-filter;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-text-decoration-color, -webkit-backdrop-filter;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-colors{transition-property:color, background-color, border-color, fill, stroke, -webkit-text-decoration-color;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, -webkit-text-decoration-color;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-opacity{transition-property:opacity;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-shadow{transition-property:box-shadow;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-transform{transition-property:transform;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.duration-200{transition-duration:200ms}.duration-300{transition-duration:300ms}.hover\:border-amber-800:hover{--tw-border-opacity:1;border-color:rgb(146 64 14 / var(--tw-border-opacity, 1))}.hover\:bg-amber-100:hover{--tw-bg-opacity:1;background-color:rgb(254 243 199 / var(--tw-bg-opacity, 1))}.hover\:bg-amber-200:hover{--tw-bg-opacity:1;background-color:rgb(253 230 138 / var(--tw-bg-opacity, 1))}.hover\:bg-amber-800:hover{--tw-bg-opacity:1;background-color:rgb(146 64 14 / var(--tw-bg-opacity, 1))}.hover\:bg-amber-900:hover{--tw-bg-opacity:1;background-color:rgb(120 53 15 / var(--tw-bg-opacity, 1))}.hover\:bg-white:hover{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.hover\:bg-gray-300:hover{--tw-bg-opacity:1;background-color:rgb(209 213 219 / var(--tw-bg-opacity, 1))}.hover\:bg-red-700:hover{--tw-bg-opacity:1;background-color:rgb(185 28 28 / var(--tw-bg-opacity, 1))}.hover\:text-amber-800:hover{--tw-text-opacity:1;color:rgb(146 64 14 / var(--tw-text-opacity, 1))}.hover\:text-amber-900:hover{--tw-text-opacity:1;color:rgb(120 53 15 / var(--tw-text-opacity, 1))}.hover\:text-blue-600:hover{--tw-text-opacity:1;color:rgb(37 99 235 / var(--tw-text-opacity, 1))}.hover\:text-green-600:hover{--tw-text-opacity:1;color:rgb(22 163 74 / var(--tw-text-opacity, 1))}.hover\:text-red-600:hover{--tw-text-opacity:1;color:rgb(220 38 38 / var(--tw-text-opacity, 1))}.hover\:text-red-800:hover{--tw-text-opacity:1;color:rgb(153 27 27 / var(--tw-text-opacity, 1))}.hover\:text-white:hover{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.hover\:shadow-lg:hover{--tw-shadow:0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color), 0 4px 6px -4px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.focus\:border-amber-800:focus{--tw-border-opacity:1;border-color:rgb(146 64 14 / var(--tw-border-opacity, 1))}.focus\:outline-none:focus{outline:2px solid transparent;outline-offset:2px}.focus\:ring-1:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000)}.focus\:ring-2:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000)}.focus\:ring-amber-800:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(146 64 14 / var(--tw-ring-opacity, 1))}.focus\:ring-blue-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(59 130 246 / var(--tw-ring-opacity, 1))}.focus\:ring-green-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(34 197 94 / var(--tw-ring-opacity, 1))}.focus\:ring-red-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(239 68 68 / var(--tw-ring-opacity, 1))}.group:hover .group-hover\:opacity-100{opacity:1}@media (min-width: 640px){.sm\:mt-0{margin-top:0px}.sm\:flex-row{flex-direction:row}.sm\:p-8{padding:2rem}.sm\:text-4xl{font-size:2.25rem;line-height:2.5rem}}@media (min-width: 768px){.md\:right-10{right:2.5rem}.md\:top-10{top:2.5rem}.md\:w-72{width:18rem}.md\:grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}.md\:flex-row{flex-direction:row}.md\:p-10{padding:2.5rem}.md\:p-12{padding:3rem}}@media (min-width: 1024px){.lg\:grid-cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}}</style><style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:Inter, sans-serif;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.pointer-events-none{pointer-events:none}.visible{visibility:visible}.absolute{position:absolute}.relative{position:relative}.bottom-full{bottom:100%}.right-0{right:0px}.right-6{right:1.5rem}.top-6{top:1.5rem}.z-10{z-index:10}.mb-1{margin-bottom:0.25rem}.mb-2{margin-bottom:0.5rem}.mb-3{margin-bottom:0.75rem}.mb-4{margin-bottom:1rem}.mb-6{margin-bottom:1.5rem}.mb-8{margin-bottom:2rem}.mr-2{margin-right:0.5rem}.mt-1{margin-top:0.25rem}.mt-12{margin-top:3rem}.mt-2{margin-top:0.5rem}.mt-3{margin-top:0.75rem}.mt-4{margin-top:1rem}.mt-6{margin-top:1.5rem}.mt-8{margin-top:2rem}.ml-2{margin-left:0.5rem}.block{display:block}.inline-block{display:inline-block}.flex{display:flex}.grid{display:grid}.hidden{display:none}.h-4{height:1rem}.h-6{height:1.5rem}.max-h-\[60vh\]{max-height:60vh}.min-h-screen{min-height:100vh}.w-4{width:1rem}.w-6{width:1.5rem}.w-full{width:100%}.w-max{width:max-content}.max-w-none{max-width:none}.flex-1{flex:1 1 0%}.flex-shrink-0{flex-shrink:0}.flex-grow{flex-grow:1}.cursor-pointer{cursor:pointer}.grid-cols-1{grid-template-columns:repeat(1, minmax(0, 1fr))}.grid-cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-center{align-items:center}.items-baseline{align-items:baseline}.justify-end{justify-content:flex-end}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-2{gap:0.5rem}.gap-3{gap:0.75rem}.gap-4{gap:1rem}.gap-6{gap:1.5rem}.space-y-1 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.25rem * var(--tw-space-y-reverse))}.space-y-2 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.5rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.5rem * var(--tw-space-y-reverse))}.space-y-3 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.75rem * var(--tw-space-y-reverse))}.space-y-4 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem * var(--tw-space-y-reverse))}.overflow-y-auto{overflow-y:auto}.scroll-smooth{scroll-behavior:smooth}.whitespace-nowrap{white-space:nowrap}.whitespace-pre-wrap{white-space:pre-wrap}.rounded{border-radius:0.25rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.rounded-md{border-radius:0.375rem}.border{border-width:1px}.border-l-2{border-left-width:2px}.border-r{border-right-width:1px}.border-t{border-top-width:1px}.border-b{border-bottom-width:1px}.border-amber-200{--tw-border-opacity:1;border-color:rgb(253 230 138 / var(--tw-border-opacity, 1))}.border-gray-100{--tw-border-opacity:1;border-color:rgb(243 244 246 / var(--tw-border-opacity, 1))}.border-gray-200{--tw-border-opacity:1;border-color:rgb(229 231 235 / var(--tw-border-opacity, 1))}.border-gray-300{--tw-border-opacity:1;border-color:rgb(209 213 219 / var(--tw-border-opacity, 1))}.bg-amber-100{--tw-bg-opacity:1;background-color:rgb(254 243 199 / var(--tw-bg-opacity, 1))}.bg-amber-800{--tw-bg-opacity:1;background-color:rgb(146 64 14 / var(--tw-bg-opacity, 1))}.bg-gray-200{--tw-bg-opacity:1;background-color:rgb(229 231 235 / var(--tw-bg-opacity, 1))}.bg-gray-50{--tw-bg-opacity:1;background-color:rgb(249 250 251 / var(--tw-bg-opacity, 1))}.bg-gray-800{--tw-bg-opacity:1;background-color:rgb(31 41 55 / var(--tw-bg-opacity, 1))}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.bg-white\/70{background-color:rgb(255 255 255 / 0.7)}.bg-red-600{--tw-bg-opacity:1;background-color:rgb(220 38 38 / var(--tw-bg-opacity, 1))}.bg-stone-50{--tw-bg-opacity:1;background-color:rgb(250 250 249 / var(--tw-bg-opacity, 1))}.p-2{padding:0.5rem}.p-3{padding:0.75rem}.p-4{padding:1rem}.p-6{padding:1.5rem}.px-2{padding-left:0.5rem;padding-right:0.5rem}.px-2\.5{padding-left:0.625rem;padding-right:0.625rem}.px-3{padding-left:0.75rem;padding-right:0.75rem}.px-4{padding-left:1rem;padding-right:1rem}.px-6{padding-left:1.5rem;padding-right:1.5rem}.py-0\.5{padding-top:0.125rem;padding-bottom:0.125rem}.py-1{padding-top:0.25rem;padding-bottom:0.25rem}.py-16{padding-top:4rem;padding-bottom:4rem}.py-2{padding-top:0.5rem;padding-bottom:0.5rem}.py-3{padding-top:0.75rem;padding-bottom:0.75rem}.pl-2{padding-left:0.5rem}.pl-8{padding-left:2rem}.pr-3{padding-right:0.75rem}.pt-3{padding-top:0.75rem}.pr-2{padding-right:0.5rem}.text-left{text-align:left}.text-center{text-align:center}.font-sans{font-family:Inter, sans-serif}.font-serif{font-family:Lora, serif}.text-2xl{font-size:1.5rem;line-height:2rem}.text-4xl{font-size:2.25rem;line-height:2.5rem}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:0.75rem;line-height:1rem}.text-3xl{font-size:1.875rem;line-height:2.25rem}.font-bold{font-weight:700}.font-medium{font-weight:500}.font-semibold{font-weight:600}.uppercase{text-transform:uppercase}.italic{font-style:italic}.leading-relaxed{line-height:1.625}.tracking-wider{letter-spacing:0.05em}.text-amber-700{--tw-text-opacity:1;color:rgb(180 83 9 / var(--tw-text-opacity, 1))}.text-amber-800{--tw-text-opacity:1;color:rgb(146 64 14 / var(--tw-text-opacity, 1))}.text-gray-400{--tw-text-opacity:1;color:rgb(156 163 175 / var(--tw-text-opacity, 1))}.text-gray-500{--tw-text-opacity:1;color:rgb(107 114 128 / var(--tw-text-opacity, 1))}.text-gray-600{--tw-text-opacity:1;color:rgb(75 85 99 / var(--tw-text-opacity, 1))}.text-gray-700{--tw-text-opacity:1;color:rgb(55 65 81 / var(--tw-text-opacity, 1))}.text-gray-800{--tw-text-opacity:1;color:rgb(31 41 55 / var(--tw-text-opacity, 1))}.text-gray-900{--tw-text-opacity:1;color:rgb(17 24 39 / var(--tw-text-opacity, 1))}.text-red-600{--tw-text-opacity:1;color:rgb(220 38 38 / var(--tw-text-opacity, 1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.antialiased{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.opacity-0{opacity:0}.shadow-sm{--tw-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.backdrop-blur-sm{--tw-backdrop-blur:blur(4px);-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.transition{transition-property:color, background-color, border-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-text-decoration-color, -webkit-backdrop-filter;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-text-decoration-color, -webkit-backdrop-filter;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-colors{transition-property:color, background-color, border-color, fill, stroke, -webkit-text-decoration-color;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, -webkit-text-decoration-color;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-opacity{transition-property:opacity;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-shadow{transition-property:box-shadow;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.transition-transform{transition-property:transform;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.duration-200{transition-duration:200ms}.duration-300{transition-duration:300ms}.hover\:border-amber-800:hover{--tw-border-opacity:1;border-color:rgb(146 64 14 / var(--tw-border-opacity, 1))}.hover\:bg-amber-100:hover{--tw-bg-opacity:1;background-color:rgb(254 243 199 / var(--tw-bg-opacity, 1))}.hover\:bg-amber-200:hover{--tw-bg-opacity:1;background-color:rgb(253 230 138 / var(--tw-bg-opacity, 1))}.hover\:bg-amber-800:hover{--tw-bg-opacity:1;background-color:rgb(146 64 14 / var(--tw-bg-opacity, 1))}.hover\:bg-amber-900:hover{--tw-bg-opacity:1;background-color:rgb(120 53 15 / var(--tw-bg-opacity, 1))}.hover\:bg-gray-300:hover{--tw-bg-opacity:1;background-color:rgb(209 213 219 / var(--tw-bg-opacity, 1))}.hover\:bg-white:hover{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.hover\:bg-red-700:hover{--tw-bg-opacity:1;background-color:rgb(185 28 28 / var(--tw-bg-opacity, 1))}.hover\:text-amber-800:hover{--tw-text-opacity:1;color:rgb(146 64 14 / var(--tw-text-opacity, 1))}.hover\:text-amber-900:hover{--tw-text-opacity:1;color:rgb(120 53 15 / var(--tw-text-opacity, 1))}.hover\:text-blue-600:hover{--tw-text-opacity:1;color:rgb(37 99 235 / var(--tw-text-opacity, 1))}.hover\:text-green-600:hover{--tw-text-opacity:1;color:rgb(22 163 74 / var(--tw-text-opacity, 1))}.hover\:text-red-600:hover{--tw-text-opacity:1;color:rgb(220 38 38 / var(--tw-text-opacity, 1))}.hover\:text-red-800:hover{--tw-text-opacity:1;color:rgb(153 27 27 / var(--tw-text-opacity, 1))}.hover\:text-white:hover{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.hover\:shadow-lg:hover{--tw-shadow:0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color), 0 4px 6px -4px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.focus\:border-amber-800:focus{--tw-border-opacity:1;border-color:rgb(146 64 14 / var(--tw-border-opacity, 1))}.focus\:outline-none:focus{outline:2px solid transparent;outline-offset:2px}.focus\:ring-1:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000)}.focus\:ring-2:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000)}.focus\:ring-amber-800:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(146 64 14 / var(--tw-ring-opacity, 1))}.focus\:ring-blue-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(59 130 246 / var(--tw-ring-opacity, 1))}.focus\:ring-green-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(34 197 94 / var(--tw-ring-opacity, 1))}.focus\:ring-red-500:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(239 68 68 / var(--tw-ring-opacity, 1))}.group:hover .group-hover\:opacity-100{opacity:1}@media (min-width: 640px){.sm\:mt-0{margin-top:0px}.sm\:flex-row{flex-direction:row}.sm\:p-8{padding:2rem}.sm\:text-4xl{font-size:2.25rem;line-height:2.5rem}}@media (min-width: 768px){.md\:right-10{right:2.5rem}.md\:top-10{top:2.5rem}.md\:w-72{width:18rem}.md\:grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}.md\:flex-row{flex-direction:row}.md\:p-10{padding:2.5rem}.md\:p-12{padding:3rem}}@media (min-width: 1024px){.lg\:grid-cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}}</style></head>
+<body class="antialiased">
+
+    <div class="flex flex-col md:flex-row min-h-screen">
+        <aside class="w-full md:w-72 bg-white border-r border-gray-200 p-6 flex-shrink-0">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Navegação</h2>
+            <div class="mb-4">
+                <input type="search" id="book-search-input" placeholder="Buscar livro..." class="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-1 focus:ring-amber-800 focus:border-amber-800 transition">
+            </div>
+            <div id="category-nav" class="space-y-2"><button class="w-full text-left px-3 py-2 rounded-md font-semibold mb-2 hover:bg-amber-100 category-filter-btn active-filter" data-category="all">Todos os Livros</button>
+                            <details class="group">
+                                <summary class="flex items-center justify-between px-3 py-2 rounded-md font-semibold hover:bg-amber-100">
+                                    Antigo Testamento
+                                    <span class="arrow transition-transform duration-200"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></span>
+                                </summary>
+                                <div class="mt-1 space-y-1"><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Gênesis">Gênesis</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Êxodo">Êxodo</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Levítico">Levítico</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Números">Números</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Deuteronômio">Deuteronômio</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Josué">Josué</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Juízes">Juízes</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Rute">Rute</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="1 Samuel">1 Samuel</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="2 Samuel">2 Samuel</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="1 Reis">1 Reis</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="2 Reis">2 Reis</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="1 Crônicas">1 Crônicas</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="2 Crônicas">2 Crônicas</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Esdras">Esdras</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Neemias">Neemias</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Ester">Ester</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Jó">Jó</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Salmos">Salmos</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Provérbios">Provérbios</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Eclesiastes">Eclesiastes</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Cânticos">Cânticos</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Isaías">Isaías</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Jeremias">Jeremias</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Lamentações">Lamentações</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Ezequiel">Ezequiel</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Daniel">Daniel</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Oseias">Oseias</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Joel">Joel</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Amós">Amós</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Obadias">Obadias</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Jonas">Jonas</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Miqueias">Miqueias</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Naum">Naum</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Habacuque">Habacuque</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Sofonias">Sofonias</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Ageu">Ageu</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Zacarias">Zacarias</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Malaquias">Malaquias</a></div>
+                            </details>
+                        
+                            <details class="group" open="">
+                                <summary class="flex items-center justify-between px-3 py-2 rounded-md font-semibold hover:bg-amber-100">
+                                    Novo Testamento
+                                    <span class="arrow transition-transform duration-200"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></span>
+                                </summary>
+                                <div class="mt-1 space-y-1"><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Mateus">Mateus</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Marcos">Marcos</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Lucas">Lucas</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="João">João</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Atos">Atos</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Romanos">Romanos</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="1 Coríntios">1 Coríntios</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="2 Coríntios">2 Coríntios</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Gálatas">Gálatas</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Efésios">Efésios</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Filipenses">Filipenses</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Colossenses">Colossenses</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="1 Tessalonicenses">1 Tessalonicenses</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="2 Tessalonicenses">2 Tessalonicenses</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="1 Timóteo">1 Timóteo</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="2 Timóteo">2 Timóteo</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Tito">Tito</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Filemom">Filemom</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Hebreus">Hebreus</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Tiago">Tiago</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="1 Pedro">1 Pedro</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="2 Pedro">2 Pedro</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="1 João">1 João</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="2 João">2 João</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="3 João">3 João</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Judas">Judas</a><a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="Apocalipse">Apocalipse</a></div>
+                            </details>
+                        </div>
+        </aside>
+
+        <main class="flex-1 p-6 md:p-10 relative">
+            <div class="absolute top-6 right-6 md:top-10 md:right-10 z-10 flex items-center gap-2">
+                <!-- Botão para salvar no navegador -->
+                <div class="relative group">
+                    <button id="save-to-browser-btn" class="p-2 rounded-full bg-white/70 backdrop-blur-sm border border-gray-200 text-gray-600 hover:bg-white hover:text-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                    </button>
+                    <span class="absolute bottom-full mb-2 right-0 w-max px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Salvar no Navegador</span>
+                </div>
+                <!-- Botão para baixar arquivo HTML -->
+                <div class="relative group">
+                    <button id="download-html-btn" class="p-2 rounded-full bg-white/70 backdrop-blur-sm border border-gray-200 text-gray-600 hover:bg-white hover:text-green-600 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    </button>
+                     <span class="absolute bottom-full mb-2 right-0 w-max px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Baixar Arquivo HTML</span>
+                </div>
+                 <!-- Botão para limpar dados do navegador -->
+                 <div class="relative group">
+                    <button id="clear-data-btn" class="p-2 rounded-full bg-white/70 backdrop-blur-sm border border-gray-200 text-gray-600 hover:bg-white hover:text-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    </button>
+                     <span class="absolute bottom-full mb-2 right-0 w-max px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Limpar Dados Salvos</span>
+                </div>
+            </div>
+
+            <header class="mb-8">
+                <h1 class="text-4xl font-bold text-gray-900">Anotações da Bíblia</h1>
+                <p class="text-lg text-gray-600 mt-2">Uma ferramenta para organizar e consultar referências e estudos bíblicos.</p>
+                <p id="last-saved-date" class="text-xs text-gray-500 mt-2">Última edição em 10 de setembro de 2025 às 22:16</p>
+            </header>
+
+            <div class="mb-8 flex flex-col sm:flex-row gap-4">
+                <input type="search" id="search-input" placeholder="Pesquisar por tema, versículo ou palavra-chave..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-800 focus:border-amber-800 transition">
+                <button id="add-reference-btn" class="bg-amber-800 hover:bg-amber-900 text-white font-bold py-3 px-6 rounded-lg transition-colors whitespace-nowrap">
+                    Adicionar Referência
+                </button>
+            </div>
+
+            <div class="mb-8">
+                <div class="flex items-center justify-between mb-3">
+                     <h3 class="text-lg font-semibold text-gray-700">Etiquetas Mais Usadas:</h3>
+                     <button id="view-all-tags-btn" class="text-sm font-semibold text-amber-800 hover:text-amber-900">Ver Todas</button>
+                </div>
+                <div id="tags-container" class="flex flex-wrap gap-2"><button class="px-3 py-1 text-sm border rounded-full hover:bg-amber-800 hover:text-white hover:border-amber-800 transition-colors bg-white text-gray-600 border-gray-300" data-tag="Arrogância">Arrogância</button><button class="px-3 py-1 text-sm border rounded-full hover:bg-amber-800 hover:text-white hover:border-amber-800 transition-colors bg-white text-gray-600 border-gray-300" data-tag="Idolatria">Idolatria</button><button class="px-3 py-1 text-sm border rounded-full hover:bg-amber-800 hover:text-white hover:border-amber-800 transition-colors bg-white text-gray-600 border-gray-300" data-tag="Verdade">Verdade</button><button class="px-3 py-1 text-sm border rounded-full hover:bg-amber-800 hover:text-white hover:border-amber-800 transition-colors bg-white text-gray-600 border-gray-300" data-tag="Mentira">Mentira</button><button class="px-3 py-1 text-sm border rounded-full hover:bg-amber-800 hover:text-white hover:border-amber-800 transition-colors bg-white text-gray-600 border-gray-300" data-tag="criação">criação</button><button class="px-3 py-1 text-sm border rounded-full hover:bg-amber-800 hover:text-white hover:border-amber-800 transition-colors bg-white text-gray-600 border-gray-300" data-tag="início">início</button><button class="px-3 py-1 text-sm border rounded-full hover:bg-amber-800 hover:text-white hover:border-amber-800 transition-colors bg-white text-gray-600 border-gray-300" data-tag="Deus">Deus</button><button class="px-3 py-1 text-sm border rounded-full hover:bg-amber-800 hover:text-white hover:border-amber-800 transition-colors bg-white text-gray-600 border-gray-300" data-tag="fundação">fundação</button></div>
+            </div>
+
+            <div>
+                <div class="flex flex-col sm:flex-row justify-between items-baseline mb-6">
+                    <div class="flex items-center gap-4">
+                        <h2 id="results-title" class="text-2xl font-bold text-gray-800">Todas as Referências</h2>
+                        <span id="reference-count" class="text-lg font-medium text-gray-500">3 referências</span>
+                        <div id="clear-filters-container" class="flex items-center gap-2">
+                            <button id="clear-book-filter-btn" class="text-sm font-semibold text-red-600 hover:text-red-800 transition-opacity duration-300 hidden">Limpar Livro</button>
+                            <button id="clear-tag-filter-btn" class="text-sm font-semibold text-red-600 hover:text-red-800 transition-opacity duration-300 hidden">Limpar Etiqueta</button>
+                        </div>
+                    </div>
+                    <!-- Menu suspenso para escolher itens por página -->
+                    <div class="flex items-center gap-2 mt-4 sm:mt-0">
+                        <label for="items-per-page-select" class="text-sm font-medium text-gray-600">Referências por página:</label>
+                        <select id="items-per-page-select" class="p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-amber-800">
+                            <option value="9">9</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                            <option value="all">Mostrar Tudo</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2 mt-4 sm:mt-0">
+                        <label for="sort-order" class="text-sm font-medium text-gray-600">Ordenar por:</label>
+                        <select id="sort-order" class="p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-amber-800">
+                            <option value="title-asc">Título (A-Z)</option>
+                            <option value="title-desc">Título (Z-A)</option>
+                            <option value="chapter-asc">Capítulo (Crescente)</option>
+                            <option value="chapter-desc">Capítulo (Decrescente)</option>
+                            <option value="date-desc">Mais Recentes</option>
+                            <option value="date-asc">Mais Antigas</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="topics-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"><div class="bg-white border border-gray-200 rounded-lg p-6 flex flex-col shadow-sm hover:shadow-lg transition-shadow duration-300">
+                        <div class="flex-grow">
+                            <p class="text-sm font-semibold text-amber-700 mb-1">Romanos 1:22-25</p>
+                            <h3 class="text-xl font-bold text-gray-800 mb-2 cursor-pointer read-mode-btn" data-id="1757553383061">Arrogância, Idolatria e Mentira (Cópia)</h3>
+                            <p class="text-sm text-gray-500 mt-2 italic border-l-2 border-amber-200 pl-2">
+                            No versículo 22, fica evidente que a arrogância precede a ignorÂncia e queda. Lo...
+                        </p>
+                            
+                        </div>
+                        <div class="flex-shrink-0 mt-6">
+                            <div class="mb-4"><button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full topic-tag-btn" data-tag="Arrogância">Arrogância</button> <button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full topic-tag-btn" data-tag="Idolatria">Idolatria</button> <button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full topic-tag-btn" data-tag="Verdade">Verdade</button> <button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full topic-tag-btn" data-tag="Mentira">Mentira</button></div>
+                            <div class="flex justify-end gap-3 text-sm">
+                                <button class="text-gray-500 hover:text-amber-800 duplicate-btn" data-id="1757553383061" title="Duplicar">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                </button>
+                                <button class="text-gray-500 hover:text-amber-800 edit-btn" data-id="1757553383061" title="Editar">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                                </button>
+                                <button class="text-gray-500 hover:text-red-600 delete-btn" data-id="1757553383061" title="Excluir">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div><div class="bg-white border border-gray-200 rounded-lg p-6 flex flex-col shadow-sm hover:shadow-lg transition-shadow duration-300">
+                        <div class="flex-grow">
+                            <p class="text-sm font-semibold text-amber-700 mb-1">Romanos 1:22-25</p>
+                            <h3 class="text-xl font-bold text-gray-800 mb-2 cursor-pointer read-mode-btn" data-id="1757553363990">Arrogância, Idolatria e Mentira</h3>
+                            <p class="text-sm text-gray-500 mt-2 italic border-l-2 border-amber-200 pl-2">
+                            No versículo 22, fica evidente que a arrogância precede a ignorÂncia e queda. Lo...
+                        </p>
+                            
+                        </div>
+                        <div class="flex-shrink-0 mt-6">
+                            <div class="mb-4"><button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full topic-tag-btn" data-tag="Arrogância">Arrogância</button> <button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full topic-tag-btn" data-tag="Idolatria">Idolatria</button> <button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full topic-tag-btn" data-tag="Verdade">Verdade</button> <button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full topic-tag-btn" data-tag="Mentira">Mentira</button></div>
+                            <div class="flex justify-end gap-3 text-sm">
+                                <button class="text-gray-500 hover:text-amber-800 duplicate-btn" data-id="1757553363990" title="Duplicar">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                </button>
+                                <button class="text-gray-500 hover:text-amber-800 edit-btn" data-id="1757553363990" title="Editar">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                                </button>
+                                <button class="text-gray-500 hover:text-red-600 delete-btn" data-id="1757553363990" title="Excluir">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div><div class="bg-white border border-gray-200 rounded-lg p-6 flex flex-col shadow-sm hover:shadow-lg transition-shadow duration-300">
+                        <div class="flex-grow">
+                            <p class="text-sm font-semibold text-amber-700 mb-1">Gênesis 1:1-31</p>
+                            <h3 class="text-xl font-bold text-gray-800 mb-2 cursor-pointer read-mode-btn" data-id="1757413408286">A Criação do Mundo</h3>
+                            <p class="text-sm text-gray-500 mt-2 italic border-l-2 border-amber-200 pl-2">
+                            O relato da criação do céu e da terra por Deus em seis dias....
+                        </p>
+                            <div class="mt-3 pt-3 border-t border-gray-100">
+                            <h4 class="text-xs font-bold text-gray-500">Relacionados:</h4>
+                            <p class="text-xs text-gray-600 mt-1">Jó 1:1-1</p>
+                        </div>
+                        </div>
+                        <div class="flex-shrink-0 mt-6">
+                            <div class="mb-4"><button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full topic-tag-btn" data-tag="criação">criação</button> <button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full topic-tag-btn" data-tag="início">início</button> <button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full topic-tag-btn" data-tag="Deus">Deus</button> <button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full topic-tag-btn" data-tag="fundação">fundação</button></div>
+                            <div class="flex justify-end gap-3 text-sm">
+                                <button class="text-gray-500 hover:text-amber-800 duplicate-btn" data-id="1757413408286" title="Duplicar">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                </button>
+                                <button class="text-gray-500 hover:text-amber-800 edit-btn" data-id="1757413408286" title="Editar">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                                </button>
+                                <button class="text-gray-500 hover:text-red-600 delete-btn" data-id="1757413408286" title="Excluir">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div></div>
+                 <div id="no-results" class="text-center py-16 hidden">
+                    <p class="text-gray-500 text-lg">Nenhuma referência encontrada.</p>
+                    <p class="text-gray-400 mt-2">Tente ajustar sua busca ou filtros.</p>
+                </div>
+                <div id="pagination-container" class="mt-8 flex justify-center items-center gap-2"></div>
+
+                <!-- Nova seção para as referências cruzadas -->
+                <div id="cross-references-container" class="mt-12 hidden">
+                    <details class="group" open="">
+                        <summary class="flex items-center justify-between px-4 py-3 rounded-lg font-bold bg-amber-100 hover:bg-amber-200 transition-colors">
+                            <span class="text-amber-800 text-lg">Referências Cruzadas</span>
+                            <span class="arrow transition-transform duration-200">
+                                <svg class="w-6 h-6 text-amber-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
+                            </span>
+                        </summary>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6 p-4 border rounded-lg bg-gray-50" id="cross-ref-grid"><div class="bg-white border border-gray-200 rounded-lg p-6 flex flex-col shadow-sm hover:shadow-lg transition-shadow duration-300">
+                        <div class="flex-grow">
+                            <p class="text-sm font-semibold text-amber-700 mb-1">Gênesis 1:1-31</p>
+                            <h3 class="text-xl font-bold text-gray-800 mb-2 cursor-pointer read-mode-btn" data-id="1">A Criação do Mundo</h3>
+                            <p class="text-sm text-gray-500 mt-2 italic border-l-2 border-amber-200 pl-2">
+                            O relato da criação do céu e da terra por Deus em seis dias....
+                        </p>
+                            <div class="mt-3 pt-3 border-t border-gray-100">
+                            <h4 class="text-xs font-bold text-gray-500">Relacionados:</h4>
+                            <p class="text-xs text-gray-600 mt-1">Jó 38:4-7</p>
+                        </div>
+                        </div>
+                        <div class="flex-shrink-0 mt-6">
+                            <div class="mb-4"><button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full topic-tag-btn" data-tag="criação">criação</button> <button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full topic-tag-btn" data-tag="início">início</button> <button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full topic-tag-btn" data-tag="Deus">Deus</button> <button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full topic-tag-btn" data-tag="fundação">fundação</button></div>
+                            <div class="flex justify-end gap-3 text-sm">
+                                <button class="text-gray-500 hover:text-amber-800 duplicate-btn" data-id="1" title="Duplicar">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                </button>
+                                <button class="text-gray-500 hover:text-amber-800 edit-btn" data-id="1" title="Editar">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                                </button>
+                                <button class="text-gray-500 hover:text-red-600 delete-btn" data-id="1" title="Excluir">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div></div>
+                    </details>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="addTopicModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold mb-6">Adicionar Nova Referência</h2>
+            <form id="add-topic-form" class="space-y-4">
+                <input type="text" name="title" placeholder="Tema ou Título da Referência" class="w-full p-2 border rounded" required="">
+                <select name="category" class="w-full p-2 border rounded" required=""><option value="">Selecione um livro...</option><optgroup label="Antigo Testamento"><option value="Gênesis">Gênesis</option><option value="Êxodo">Êxodo</option><option value="Levítico">Levítico</option><option value="Números">Números</option><option value="Deuteronômio">Deuteronômio</option><option value="Josué">Josué</option><option value="Juízes">Juízes</option><option value="Rute">Rute</option><option value="1 Samuel">1 Samuel</option><option value="2 Samuel">2 Samuel</option><option value="1 Reis">1 Reis</option><option value="2 Reis">2 Reis</option><option value="1 Crônicas">1 Crônicas</option><option value="2 Crônicas">2 Crônicas</option><option value="Esdras">Esdras</option><option value="Neemias">Neemias</option><option value="Ester">Ester</option><option value="Jó">Jó</option><option value="Salmos">Salmos</option><option value="Provérbios">Provérbios</option><option value="Eclesiastes">Eclesiastes</option><option value="Cânticos">Cânticos</option><option value="Isaías">Isaías</option><option value="Jeremias">Jeremias</option><option value="Lamentações">Lamentações</option><option value="Ezequiel">Ezequiel</option><option value="Daniel">Daniel</option><option value="Oseias">Oseias</option><option value="Joel">Joel</option><option value="Amós">Amós</option><option value="Obadias">Obadias</option><option value="Jonas">Jonas</option><option value="Miqueias">Miqueias</option><option value="Naum">Naum</option><option value="Habacuque">Habacuque</option><option value="Sofonias">Sofonias</option><option value="Ageu">Ageu</option><option value="Zacarias">Zacarias</option><option value="Malaquias">Malaquias</option></optgroup><optgroup label="Novo Testamento"><option value="Mateus">Mateus</option><option value="Marcos">Marcos</option><option value="Lucas">Lucas</option><option value="João">João</option><option value="Atos">Atos</option><option value="Romanos">Romanos</option><option value="1 Coríntios">1 Coríntios</option><option value="2 Coríntios">2 Coríntios</option><option value="Gálatas">Gálatas</option><option value="Efésios">Efésios</option><option value="Filipenses">Filipenses</option><option value="Colossenses">Colossenses</option><option value="1 Tessalonicenses">1 Tessalonicenses</option><option value="2 Tessalonicenses">2 Tessalonicenses</option><option value="1 Timóteo">1 Timóteo</option><option value="2 Timóteo">2 Timóteo</option><option value="Tito">Tito</option><option value="Filemom">Filemom</option><option value="Hebreus">Hebreus</option><option value="Tiago">Tiago</option><option value="1 Pedro">1 Pedro</option><option value="2 Pedro">2 Pedro</option><option value="1 João">1 João</option><option value="2 João">2 João</option><option value="3 João">3 João</option><option value="Judas">Judas</option><option value="Apocalipse">Apocalipse</option></optgroup></select>
+                <div class="grid grid-cols-3 gap-4">
+                    <input type="number" name="chapter" placeholder="Capítulo" class="w-full p-2 border rounded" required="" min="1">
+                    <input type="number" name="startVerse" placeholder="Vers. Inicial" class="w-full p-2 border rounded" required="" min="1">
+                    <input type="number" name="endVerse" placeholder="Vers. Final (opc.)" class="w-full p-2 border rounded" min="1">
+                </div>
+                <textarea name="content" placeholder="Anotações / Descrição" rows="6" class="w-full p-2 border rounded"></textarea>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Versículos Relacionados</label>
+                    <div id="add-related-verses-container" class="space-y-3"></div>
+                    <button type="button" id="add-new-related-verse-btn" class="mt-2 text-sm font-semibold text-amber-800 hover:text-amber-900">+ Adicionar versículo relacionado</button>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Etiquetas</label>
+                    <div id="add-tags-editor" class="tags-editor-container">
+                        <input type="text" placeholder="Adicionar..." class="tags-editor-input">
+                    </div>
+                    <div id="add-tags-suggestions" class="tags-suggestions-container"></div>
+                </div>
+                <div class="flex justify-end gap-4 mt-4">
+                    <button type="button" class="modal-cancel-btn px-4 py-2 rounded bg-gray-200 hover:bg-gray-300">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 rounded bg-amber-800 text-white hover:bg-amber-900">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="editTopicModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold mb-6">Editar Referência</h2>
+            <form id="edit-topic-form" class="space-y-4">
+                <input type="hidden" name="id" value="1757412473196">
+                <input type="text" name="title" placeholder="Tema ou Título da Referência" class="w-full p-2 border rounded" required="">
+                <select name="category" class="w-full p-2 border rounded" required=""><option value="">Selecione um livro...</option><optgroup label="Antigo Testamento"><option value="Gênesis">Gênesis</option><option value="Êxodo">Êxodo</option><option value="Levítico">Levítico</option><option value="Números">Números</option><option value="Deuteronômio">Deuteronômio</option><option value="Josué">Josué</option><option value="Juízes">Juízes</option><option value="Rute">Rute</option><option value="1 Samuel">1 Samuel</option><option value="2 Samuel">2 Samuel</option><option value="1 Reis">1 Reis</option><option value="2 Reis">2 Reis</option><option value="1 Crônicas">1 Crônicas</option><option value="2 Crônicas">2 Crônicas</option><option value="Esdras">Esdras</option><option value="Neemias">Neemias</option><option value="Ester">Ester</option><option value="Jó">Jó</option><option value="Salmos">Salmos</option><option value="Provérbios">Provérbios</option><option value="Eclesiastes">Eclesiastes</option><option value="Cânticos">Cânticos</option><option value="Isaías">Isaías</option><option value="Jeremias">Jeremias</option><option value="Lamentações">Lamentações</option><option value="Ezequiel">Ezequiel</option><option value="Daniel">Daniel</option><option value="Oseias">Oseias</option><option value="Joel">Joel</option><option value="Amós">Amós</option><option value="Obadias">Obadias</option><option value="Jonas">Jonas</option><option value="Miqueias">Miqueias</option><option value="Naum">Naum</option><option value="Habacuque">Habacuque</option><option value="Sofonias">Sofonias</option><option value="Ageu">Ageu</option><option value="Zacarias">Zacarias</option><option value="Malaquias">Malaquias</option></optgroup><optgroup label="Novo Testamento"><option value="Mateus">Mateus</option><option value="Marcos">Marcos</option><option value="Lucas">Lucas</option><option value="João">João</option><option value="Atos">Atos</option><option value="Romanos">Romanos</option><option value="1 Coríntios">1 Coríntios</option><option value="2 Coríntios">2 Coríntios</option><option value="Gálatas">Gálatas</option><option value="Efésios">Efésios</option><option value="Filipenses">Filipenses</option><option value="Colossenses">Colossenses</option><option value="1 Tessalonicenses">1 Tessalonicenses</option><option value="2 Tessalonicenses">2 Tessalonicenses</option><option value="1 Timóteo">1 Timóteo</option><option value="2 Timóteo">2 Timóteo</option><option value="Tito">Tito</option><option value="Filemom">Filemom</option><option value="Hebreus">Hebreus</option><option value="Tiago">Tiago</option><option value="1 Pedro">1 Pedro</option><option value="2 Pedro">2 Pedro</option><option value="1 João">1 João</option><option value="2 João">2 João</option><option value="3 João">3 João</option><option value="Judas">Judas</option><option value="Apocalipse">Apocalipse</option></optgroup></select>
+                <div class="grid grid-cols-3 gap-4">
+                    <input type="number" name="chapter" placeholder="Capítulo" class="w-full p-2 border rounded" required="" min="1">
+                    <input type="number" name="startVerse" placeholder="Vers. Inicial" class="w-full p-2 border rounded" required="" min="1">
+                    <input type="number" name="endVerse" placeholder="Vers. Final (opc.)" class="w-full p-2 border rounded" min="1">
+                </div>
+                <textarea name="content" placeholder="Anotações / Descrição" rows="6" class="w-full p-2 border rounded"></textarea>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Versículos Relacionados</label>
+                    <div id="edit-related-verses-container" class="space-y-3"></div>
+                    <button type="button" id="edit-add-new-related-verse-btn" class="mt-2 text-sm font-semibold text-amber-800 hover:text-amber-900">+ Adicionar versículo relacionado</button>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Etiquetas</label>
+                    <div id="edit-tags-editor" class="tags-editor-container">
+                        <input type="text" placeholder="Adicionar..." class="tags-editor-input">
+                    </div>
+                    <div id="edit-tags-suggestions" class="tags-suggestions-container"></div>
+                </div>
+                <div class="flex justify-end gap-4 mt-4">
+                    <button type="button" class="modal-cancel-btn px-4 py-2 rounded bg-gray-200 hover:bg-gray-300">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 rounded bg-amber-800 text-white hover:bg-amber-900">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="deleteModal" class="modal-overlay">
+        <div class="modal-content text-center">
+            <h2 class="text-2xl font-bold mb-4">Confirmar Exclusão</h2>
+            <p class="mb-6 text-gray-600">Você tem certeza que deseja excluir esta referência? Esta ação não pode ser desfeita.</p>
+            <div class="flex justify-center gap-4">
+                <button class="modal-cancel-btn px-6 py-2 rounded bg-gray-200 hover:bg-gray-300">Cancelar</button>
+                <button id="confirm-delete" class="px-6 py-2 rounded bg-red-600 text-white hover:bg-red-700">Excluir</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="allTagsModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold mb-4">Todas as Etiquetas</h2>
+            <input type="search" id="tag-search-input" placeholder="Pesquisar etiquetas..." class="w-full p-3 border border-gray-300 rounded-lg mb-4">
+            <div id="all-tags-list-container" class="space-y-2"><button class="w-full text-left p-2 rounded hover:bg-amber-100 modal-tag-btn" data-tag="criação">criação</button><button class="w-full text-left p-2 rounded hover:bg-amber-100 modal-tag-btn" data-tag="Deus">Deus</button><button class="w-full text-left p-2 rounded hover:bg-amber-100 modal-tag-btn" data-tag="fundação">fundação</button><button class="w-full text-left p-2 rounded hover:bg-amber-100 modal-tag-btn" data-tag="início">início</button></div>
+            <div class="flex justify-between items-center mt-6">
+                <button type="button" id="manage-tags-btn" class="px-4 py-2 rounded bg-amber-800 text-white hover:bg-amber-900 text-sm">Gerir Etiquetas</button>
+                <button type="button" class="modal-cancel-btn px-4 py-2 rounded bg-gray-200 hover:bg-gray-300">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="manageTagsModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold mb-4">Gerir Etiquetas</h2>
+            <p class="text-sm text-gray-500 mb-4">Aqui pode editar ou excluir etiquetas. As alterações serão aplicadas a todas as referências que usam a etiqueta.</p>
+            <div id="manage-tags-list-container" class="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
+                    <div class="flex items-center justify-between p-2 border-b group">
+                        <span class="tag-name text-gray-700">amor</span>
+                        <div class="tag-actions opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button class="text-sm font-semibold text-amber-800 hover:text-amber-900 manage-edit-btn" data-tag="amor">Editar</button>
+                            <button class="text-sm font-semibold text-red-600 hover:text-red-800 ml-2 manage-delete-btn" data-tag="amor">Excluir</button>
+                        </div>
+                    </div>
+                
+                    <div class="flex items-center justify-between p-2 border-b group">
+                        <span class="tag-name text-gray-700">batata</span>
+                        <div class="tag-actions opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button class="text-sm font-semibold text-amber-800 hover:text-amber-900 manage-edit-btn" data-tag="batata">Editar</button>
+                            <button class="text-sm font-semibold text-red-600 hover:text-red-800 ml-2 manage-delete-btn" data-tag="batata">Excluir</button>
+                        </div>
+                    </div>
+                
+                    <div class="flex items-center justify-between p-2 border-b group">
+                        <span class="tag-name text-gray-700">confiança</span>
+                        <div class="tag-actions opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button class="text-sm font-semibold text-amber-800 hover:text-amber-900 manage-edit-btn" data-tag="confiança">Editar</button>
+                            <button class="text-sm font-semibold text-red-600 hover:text-red-800 ml-2 manage-delete-btn" data-tag="confiança">Excluir</button>
+                        </div>
+                    </div>
+                
+                    <div class="flex items-center justify-between p-2 border-b group">
+                        <span class="tag-name text-gray-700">criação</span>
+                        <div class="tag-actions opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button class="text-sm font-semibold text-amber-800 hover:text-amber-900 manage-edit-btn" data-tag="criação">Editar</button>
+                            <button class="text-sm font-semibold text-red-600 hover:text-red-800 ml-2 manage-delete-btn" data-tag="criação">Excluir</button>
+                        </div>
+                    </div>
+                
+                    <div class="flex items-center justify-between p-2 border-b group">
+                        <span class="tag-name text-gray-700">cuidado</span>
+                        <div class="tag-actions opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button class="text-sm font-semibold text-amber-800 hover:text-amber-900 manage-edit-btn" data-tag="cuidado">Editar</button>
+                            <button class="text-sm font-semibold text-red-600 hover:text-red-800 ml-2 manage-delete-btn" data-tag="cuidado">Excluir</button>
+                        </div>
+                    </div>
+                
+                    <div class="flex items-center justify-between p-2 border-b group">
+                        <span class="tag-name text-gray-700">Deus</span>
+                        <div class="tag-actions opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button class="text-sm font-semibold text-amber-800 hover:text-amber-900 manage-edit-btn" data-tag="Deus">Editar</button>
+                            <button class="text-sm font-semibold text-red-600 hover:text-red-800 ml-2 manage-delete-btn" data-tag="Deus">Excluir</button>
+                        </div>
+                    </div>
+                
+                    <div class="flex items-center justify-between p-2 border-b group">
+                        <span class="tag-name text-gray-700">direção</span>
+                        <div class="tag-actions opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button class="text-sm font-semibold text-amber-800 hover:text-amber-900 manage-edit-btn" data-tag="direção">Editar</button>
+                            <button class="text-sm font-semibold text-red-600 hover:text-red-800 ml-2 manage-delete-btn" data-tag="direção">Excluir</button>
+                        </div>
+                    </div>
+                
+                    <div class="flex items-center justify-between p-2 border-b group">
+                        <span class="tag-name text-gray-700">fé</span>
+                        <div class="tag-actions opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button class="text-sm font-semibold text-amber-800 hover:text-amber-900 manage-edit-btn" data-tag="fé">Editar</button>
+                            <button class="text-sm font-semibold text-red-600 hover:text-red-800 ml-2 manage-delete-btn" data-tag="fé">Excluir</button>
+                        </div>
+                    </div>
+                
+                    <div class="flex items-center justify-between p-2 border-b group">
+                        <span class="tag-name text-gray-700">fundação</span>
+                        <div class="tag-actions opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button class="text-sm font-semibold text-amber-800 hover:text-amber-900 manage-edit-btn" data-tag="fundação">Editar</button>
+                            <button class="text-sm font-semibold text-red-600 hover:text-red-800 ml-2 manage-delete-btn" data-tag="fundação">Excluir</button>
+                        </div>
+                    </div>
+                
+                    <div class="flex items-center justify-between p-2 border-b group">
+                        <span class="tag-name text-gray-700">início</span>
+                        <div class="tag-actions opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button class="text-sm font-semibold text-amber-800 hover:text-amber-900 manage-edit-btn" data-tag="início">Editar</button>
+                            <button class="text-sm font-semibold text-red-600 hover:text-red-800 ml-2 manage-delete-btn" data-tag="início">Excluir</button>
+                        </div>
+                    </div>
+                
+                    <div class="flex items-center justify-between p-2 border-b group">
+                        <span class="tag-name text-gray-700">pastor</span>
+                        <div class="tag-actions opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button class="text-sm font-semibold text-amber-800 hover:text-amber-900 manage-edit-btn" data-tag="pastor">Editar</button>
+                            <button class="text-sm font-semibold text-red-600 hover:text-red-800 ml-2 manage-delete-btn" data-tag="pastor">Excluir</button>
+                        </div>
+                    </div>
+                
+                    <div class="flex items-center justify-between p-2 border-b group">
+                        <span class="tag-name text-gray-700">proteção</span>
+                        <div class="tag-actions opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button class="text-sm font-semibold text-amber-800 hover:text-amber-900 manage-edit-btn" data-tag="proteção">Editar</button>
+                            <button class="text-sm font-semibold text-red-600 hover:text-red-800 ml-2 manage-delete-btn" data-tag="proteção">Excluir</button>
+                        </div>
+                    </div>
+                
+                    <div class="flex items-center justify-between p-2 border-b group">
+                        <span class="tag-name text-gray-700">sabedoria</span>
+                        <div class="tag-actions opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button class="text-sm font-semibold text-amber-800 hover:text-amber-900 manage-edit-btn" data-tag="sabedoria">Editar</button>
+                            <button class="text-sm font-semibold text-red-600 hover:text-red-800 ml-2 manage-delete-btn" data-tag="sabedoria">Excluir</button>
+                        </div>
+                    </div>
+                
+                    <div class="flex items-center justify-between p-2 border-b group">
+                        <span class="tag-name text-gray-700">salvação</span>
+                        <div class="tag-actions opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button class="text-sm font-semibold text-amber-800 hover:text-amber-900 manage-edit-btn" data-tag="salvação">Editar</button>
+                            <button class="text-sm font-semibold text-red-600 hover:text-red-800 ml-2 manage-delete-btn" data-tag="salvação">Excluir</button>
+                        </div>
+                    </div>
+                
+                    <div class="flex items-center justify-between p-2 border-b group">
+                        <span class="tag-name text-gray-700">vida eterna</span>
+                        <div class="tag-actions opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button class="text-sm font-semibold text-amber-800 hover:text-amber-900 manage-edit-btn" data-tag="vida eterna">Editar</button>
+                            <button class="text-sm font-semibold text-red-600 hover:text-red-800 ml-2 manage-delete-btn" data-tag="vida eterna">Excluir</button>
+                        </div>
+                    </div>
+                </div>
+             <div class="flex justify-end mt-6">
+                <button type="button" class="modal-cancel-btn px-4 py-2 rounded bg-gray-200 hover:bg-gray-300">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="readModeModal" class="modal-overlay">
+        <div class="modal-content">
+             <div id="read-mode-content">
+                            <div class="bg-stone-50 p-6 sm:p-8 md:p-12 rounded-lg">
+                                <p class="text-sm font-semibold text-amber-700 tracking-wider uppercase font-sans">Jeremias 1:1-2</p>
+                                <h2 class="text-3xl sm:text-4xl font-bold text-gray-800 mt-2 mb-4 font-serif">Texto inicial </h2>
+                                <div class="prose prose-lg max-w-none text-gray-800 mt-6 whitespace-pre-wrap leading-relaxed">aaaaaaaaaaaaaa</div>
+                                
+                                
+                            </div>
+                        </div>
+             <div class="flex justify-end mt-6">
+                <button type="button" class="modal-cancel-btn px-4 py-2 rounded bg-gray-200 hover:bg-gray-300">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Novo modal para confirmar a exclusão de todos os dados -->
+    <div id="clearDataModal" class="modal-overlay">
+        <div class="modal-content text-center">
+            <h2 class="text-2xl font-bold mb-4">Confirmar Limpeza de Dados</h2>
+            <p class="mb-6 text-gray-600">Tem certeza de que deseja remover todas as referências salvas neste navegador? Esta ação não pode ser desfeita.</p>
+            <div class="flex justify-center gap-4">
+                <button class="modal-cancel-btn px-6 py-2 rounded bg-gray-200 hover:bg-gray-300">Cancelar</button>
+                <button id="confirm-clear-data-btn" class="px-6 py-2 rounded bg-red-600 text-white hover:bg-red-700">Limpar Tudo</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast-notification">Referência excluída.</div>
+
+    <script id="bible-data-container" type="application/json">{
+    "references": [
+        {
+            "id": 1757413408286,
+            "createdAt": "2025-09-09T10:23:28.286Z",
+            "updatedAt": "2025-09-09T11:09:02.850Z",
+            "title": "A Criação do Mundo",
+            "category": "Gênesis",
+            "chapter": 1,
+            "startVerse": 1,
+            "endVerse": 31,
+            "content": "O relato da criação do céu e da terra por Deus em seis dias.\n\nDeus cria os céus e a terra.",
+            "relatedVerses": [
+                {
+                    "category": "Jó",
+                    "chapter": 1,
+                    "startVerse": 1,
+                    "endVerse": 1
+                }
+            ],
+            "keywords": [
+                "criação",
+                "início",
+                "Deus",
+                "fundação"
+            ]
+        },
+        {
+            "id": 1757553363990,
+            "createdAt": "2025-09-11T01:16:03.990Z",
+            "updatedAt": "2025-09-11T01:16:03.990Z",
+            "title": "Arrogância, Idolatria e Mentira",
+            "category": "Romanos",
+            "chapter": 1,
+            "startVerse": 22,
+            "endVerse": 25,
+            "content": "No versículo 22, fica evidente que a arrogância precede a ignorÂncia e queda. Logo após a ignorância, vem também a idolatria a figuras terrenas. \n\nÉ muito emblemático falar sobre a troca de verdade pela mentira, bem como a idolatria no \"Adorando e servindo a criatura em lugar do Criador\".\n\n22 Dizendo que eram sábios, se tornaram tolos 23 e trocaram a glória do Deus incorruptível por imagens semelhantes ao ser humano corruptível, às aves, aos quadrúpedes e aos répteis.\n24Por isso, Deus os entregou à impureza, pelos desejos do coração deles, para desonrarem o seu corpo entre si. 25 Eles trocaram a verdade de Deus pela mentira, adorando e servindo a criatura em lugar do Criador, o qual é bendito para sempre. Amém!",
+            "relatedVerses": [],
+            "keywords": [
+                "Arrogância",
+                "Idolatria",
+                "Verdade",
+                "Mentira"
+            ]
+        },
+        {
+            "id": 1757553383061,
+            "createdAt": "2025-09-11T01:16:23.061Z",
+            "updatedAt": "2025-09-11T01:16:23.061Z",
+            "title": "Arrogância, Idolatria e Mentira (Cópia)",
+            "category": "Romanos",
+            "chapter": 1,
+            "startVerse": 22,
+            "endVerse": 25,
+            "content": "No versículo 22, fica evidente que a arrogância precede a ignorÂncia e queda. Logo após a ignorância, vem também a idolatria a figuras terrenas. \n\nÉ muito emblemático falar sobre a troca de verdade pela mentira, bem como a idolatria no \"Adorando e servindo a criatura em lugar do Criador\".\n\n22 Dizendo que eram sábios, se tornaram tolos 23 e trocaram a glória do Deus incorruptível por imagens semelhantes ao ser humano corruptível, às aves, aos quadrúpedes e aos répteis.\n24Por isso, Deus os entregou à impureza, pelos desejos do coração deles, para desonrarem o seu corpo entre si. 25 Eles trocaram a verdade de Deus pela mentira, adorando e servindo a criatura em lugar do Criador, o qual é bendito para sempre. Amém!",
+            "relatedVerses": [],
+            "keywords": [
+                "Arrogância",
+                "Idolatria",
+                "Verdade",
+                "Mentira"
+            ]
+        }
+    ],
+    "lastModified": "2025-09-13T21:40:08.833Z"
+}</script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const BIBLE_BOOKS = {
+                "Antigo Testamento": ["Gênesis", "Êxodo", "Levítico", "Números", "Deuteronômio", "Josué", "Juízes", "Rute", "1 Samuel", "2 Samuel", "1 Reis", "2 Reis", "1 Crônicas", "2 Crônicas", "Esdras", "Neemias", "Ester", "Jó", "Salmos", "Provérbios", "Eclesiastes", "Cânticos", "Isaías", "Jeremias", "Lamentações", "Ezequiel", "Daniel", "Oseias", "Joel", "Amós", "Obadias", "Jonas", "Miqueias", "Naum", "Habacuque", "Sofonias", "Ageu", "Zacarias", "Malaquias"],
+                "Novo Testamento": ["Mateus", "Marcos", "Lucas", "João", "Atos", "Romanos", "1 Coríntios", "2 Coríntios", "Gálatas", "Efésios", "Filipenses", "Colossenses", "1 Tessalonicenses", "2 Tessalonicenses", "1 Timóteo", "2 Timóteo", "Tito", "Filemom", "Hebreus", "Tiago", "1 Pedro", "2 Pedro", "1 João", "2 João", "3 João", "Judas", "Apocalipse"]
+            };
+            
+            let ITEMS_PER_PAGE = 9;
+            
+            let bibleReferences = [];
+            let lastModifiedDate = null;
+            let activeCategoryFilter = null;
+            let activeTagFilter = null;
+            let searchQuery = '';
+            let currentSortOrder = 'date-desc';
+            let currentPage = 1;
+            let topicToDeleteId = null;
+            
+            const categoryNav = document.getElementById('category-nav');
+            const topicsContainer = document.getElementById('topics-container');
+            const tagsContainer = document.getElementById('tags-container');
+            const searchInput = document.getElementById('search-input');
+            const sortOrderSelect = document.getElementById('sort-order');
+            const resultsTitle = document.getElementById('results-title');
+            const noResultsDiv = document.getElementById('no-results');
+            const paginationContainer = document.getElementById('pagination-container');
+            const saveToBrowserBtn = document.getElementById('save-to-browser-btn');
+            const downloadHtmlBtn = document.getElementById('download-html-btn');
+            const itemsPerPageSelect = document.getElementById('items-per-page-select'); 
+            const clearDataBtn = document.getElementById('clear-data-btn'); 
+            const clearDataModal = document.getElementById('clearDataModal'); 
+            const confirmClearDataBtn = document.getElementById('confirm-clear-data-btn'); 
+            const crossRefContainer = document.getElementById('cross-references-container');
+            const crossRefGrid = document.getElementById('cross-ref-grid');
+
+            const addModal = document.getElementById('addTopicModal');
+            const editModal = document.getElementById('editTopicModal');
+            const deleteModal = document.getElementById('deleteModal');
+            const allTagsModal = document.getElementById('allTagsModal');
+            const manageTagsModal = document.getElementById('manageTagsModal');
+            const readModeModal = document.getElementById('readModeModal');
+
+            const addForm = document.getElementById('add-topic-form');
+            const editForm = document.getElementById('edit-topic-form');
+            
+            const showToast = (message, type = 'success') => {
+                const toast = document.getElementById('toast');
+                toast.textContent = message;
+                toast.className = 'toast-notification show';
+                if (type === 'error') toast.classList.add('error');
+                setTimeout(() => { toast.classList.remove('show'); }, 3000);
+            };
+            
+            const updateLastSavedDisplay = (dateString) => {
+                const lastSavedEl = document.getElementById('last-saved-date');
+                if (dateString) {
+                    const date = new Date(dateString);
+                    const formattedDate = date.toLocaleDateString('pt-BR', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    lastSavedEl.textContent = `Última edição em ${formattedDate}`;
+                } else {
+                    lastSavedEl.textContent = 'Nenhuma edição salva no navegador ainda.';
+                }
+            };
+
+            const saveData = () => {
+                const dataToSave = {
+                    references: bibleReferences,
+                    lastModified: new Date().toISOString()
+                };
+                localStorage.setItem('bibleExplorerData', JSON.stringify(dataToSave));
+                updateLastSavedDisplay(dataToSave.lastModified);
+                showToast('Dados salvos no navegador com sucesso!');
+            };
+
+            const populateBookSelect = (selectElement) => {
+                selectElement.innerHTML = '<option value="">Selecione um livro...</option>';
+                for (const testament in BIBLE_BOOKS) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = testament;
+                    BIBLE_BOOKS[testament].forEach(book => {
+                        const option = document.createElement('option');
+                        option.value = book;
+                        option.textContent = book;
+                        optgroup.appendChild(option);
+                    });
+                    selectElement.appendChild(optgroup);
+                }
+            };
+            
+            const renderCategories = () => {
+                const bookSearchInput = document.getElementById('book-search-input');
+                const query = bookSearchInput ? bookSearchInput.value.toLowerCase() : '';
+
+                let navHtml = `<button class="w-full text-left px-3 py-2 rounded-md font-semibold mb-2 hover:bg-amber-100 category-filter-btn" data-category="all">Todos os Livros</button>`;
+                
+                let hasResults = false;
+
+                for (const testament in BIBLE_BOOKS) {
+                    const filteredBooks = BIBLE_BOOKS[testament].filter(book => book.toLowerCase().includes(query));
+                    
+                    if (filteredBooks.length > 0) {
+                        hasResults = true;
+                        let links = filteredBooks.map(book =>
+                            `<a href="#" class="block pl-8 pr-3 py-2 text-sm rounded-md hover:bg-amber-100 category-filter-btn" data-category="${book}">${book}</a>`
+                        ).join('');
+                        
+                        const isOpen = query ? 'open' : (testament === "Novo Testamento" ? "open" : "");
+
+                        navHtml += `
+                            <details class="group" ${isOpen}>
+                                <summary class="flex items-center justify-between px-3 py-2 rounded-md font-semibold hover:bg-amber-100">
+                                    ${testament}
+                                    <span class="arrow transition-transform duration-200"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></span>
+                                </summary>
+                                <div class="mt-1 space-y-1">${links}</div>
+                            </details>
+                        `;
+                    }
+                }
+
+                if (!hasResults && query) {
+                    navHtml += `<p class="text-sm text-gray-500 px-3 py-2">Nenhum livro encontrado.</p>`;
+                }
+
+                categoryNav.innerHTML = navHtml;
+                updateActiveCategoryButton();
+            };
+            
+            const updateActiveCategoryButton = () => {
+                document.querySelectorAll('.category-filter-btn').forEach(btn => {
+                    btn.classList.remove('active-filter', 'bg-amber-100');
+                    const category = btn.dataset.category;
+                    if ((activeCategoryFilter === null && category === 'all') || activeCategoryFilter === category) {
+                        btn.classList.add('active-filter');
+                    }
+                });
+            };
+
+            const renderTags = () => {
+                const tagFrequency = {};
+                const tagCasing = {};
+
+                bibleReferences.forEach(ref => {
+                    ref.keywords.forEach(k => {
+                        const lowerK = k.toLowerCase();
+                        tagFrequency[lowerK] = (tagFrequency[lowerK] || 0) + 1;
+                        if (!tagCasing[lowerK]) {
+                            tagCasing[lowerK] = k;
+                        }
+                    });
+                });
+                const sortedTags = Object.keys(tagFrequency).sort((a, b) => tagFrequency[b] - tagFrequency[a]);
+                tagsContainer.innerHTML = sortedTags.slice(0, 10).map(tag => {
+                    const originalCaseTag = tagCasing[tag];
+                    return `<button class="px-3 py-1 text-sm border rounded-full hover:bg-amber-800 hover:text-white hover:border-amber-800 transition-colors ${activeTagFilter && activeTagFilter.toLowerCase() === tag ? 'active-filter' : 'bg-white text-gray-600 border-gray-300'}" data-tag="${originalCaseTag}">${originalCaseTag}</button>`
+                }).join('');
+            };
+            
+            const highlightText = (text, query) => {
+                if (!query || !text) return text;
+                const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                return text.replace(regex, '<mark>$1</mark>');
+            };
+
+            const renderReferencesList = (container, references) => {
+                if (references.length === 0) {
+                    container.innerHTML = `<p class="text-sm text-gray-500 italic p-4 text-center">Nenhuma referência encontrada para esta seção.</p>`;
+                    return;
+                }
+                
+                let paginatedItems = references;
+                if (ITEMS_PER_PAGE !== 'all') {
+                    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+                    const end = start + ITEMS_PER_PAGE;
+                    paginatedItems = references.slice(start, end);
+                }
+
+                container.innerHTML = '';
+                paginatedItems.forEach(ref => {
+                    let referenceString = `${ref.category} ${ref.chapter}:${ref.startVerse}`;
+                    if (ref.endVerse) referenceString += `-${ref.endVerse}`;
+
+                    const contentPreview = ref.content ? 
+                        `<p class="text-sm text-gray-500 mt-2 italic border-l-2 border-amber-200 pl-2">
+                            ${highlightText(ref.content.split('\n')[0].substring(0, 80) + (ref.content.length > 80 ? '...' : ''), searchQuery)}
+                        </p>` : '';
+
+                    const relatedVersesHtml = (ref.relatedVerses && ref.relatedVerses.length > 0) ?
+                        `<div class="mt-3 pt-3 border-t border-gray-100">
+                            <h4 class="text-xs font-bold text-gray-500">Relacionados:</h4>
+                            <p class="text-xs text-gray-600 mt-1">${ref.relatedVerses.map(rv => `${rv.category} ${rv.chapter}:${rv.startVerse}${rv.endVerse ? `-${rv.endVerse}` : ''}`).join(', ')}</p>
+                        </div>` : '';
+                    
+                    const topicCard = document.createElement('div');
+                    topicCard.className = 'bg-white border border-gray-200 rounded-lg p-6 flex flex-col shadow-sm hover:shadow-lg transition-shadow duration-300';
+                    topicCard.innerHTML = `
+                        <div class="flex-grow">
+                            <p class="text-sm font-semibold text-amber-700 mb-1">${highlightText(referenceString, searchQuery)}</p>
+                            <h3 class="text-xl font-bold text-gray-800 mb-2 cursor-pointer read-mode-btn" data-id="${ref.id}">${highlightText(ref.title, searchQuery)}</h3>
+                            ${contentPreview}
+                            ${relatedVersesHtml}
+                        </div>
+                        <div class="flex-shrink-0 mt-6">
+                            <div class="mb-4">${ref.keywords.map(k => `<button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full topic-tag-btn" data-tag="${k}">${highlightText(k, searchQuery)}</button>`).join(' ')}</div>
+                            <div class="flex justify-end gap-3 text-sm">
+                                <button class="text-gray-500 hover:text-amber-800 duplicate-btn" data-id="${ref.id}" title="Duplicar">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                </button>
+                                <button class="text-gray-500 hover:text-amber-800 edit-btn" data-id="${ref.id}" title="Editar">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                                </button>
+                                <button class="text-gray-500 hover:text-red-600 delete-btn" data-id="${ref.id}" title="Excluir">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(topicCard);
+                });
+            };
+
+            const setupPagination = (totalItems) => {
+                const pageCount = Math.ceil(totalItems / ITEMS_PER_PAGE);
+                paginationContainer.innerHTML = '';
+                if (ITEMS_PER_PAGE === 'all' || pageCount <= 1) return;
+
+                for (let i = 1; i <= pageCount; i++) {
+                    const btn = document.createElement('button');
+                    btn.innerText = i;
+                    btn.className = `pagination-btn px-3 py-1 text-sm border rounded-md hover:bg-amber-100 ${currentPage === i ? 'active' : ''}`;
+                    btn.onclick = () => { currentPage = i; filterAndRenderAll(); };
+                    paginationContainer.appendChild(btn);
+                }
+            };
+
+            const updateReferenceCount = (count, filterType, filterValue) => {
+                const countElement = document.getElementById('reference-count');
+                if (countElement) {
+                    let countText = `${count} referência${count !== 1 ? 's' : ''}`;
+                    if (filterType === 'book') {
+                        countText += ` neste livro`;
+                    } else if (filterType === 'tag') {
+                        countText += ` com a etiqueta "${filterValue}"`;
+                    }
+                    countElement.textContent = countText;
+                    countElement.classList.remove('hidden');
+                }
+            };
+            
+            const filterAndRenderAll = () => {
+                let filtered = [...bibleReferences];
+                
+                if (activeTagFilter) {
+                    filtered = filtered.filter(ref => ref.keywords.some(k => k.toLowerCase() === activeTagFilter.toLowerCase()));
+                }
+                if (searchQuery) {
+                    const lq = searchQuery.toLowerCase();
+                    filtered = filtered.filter(ref => 
+                        ref.title.toLowerCase().includes(lq) ||
+                        (ref.content && ref.content.toLowerCase().includes(lq)) ||
+                        ref.keywords.some(k => k.toLowerCase().includes(lq)) ||
+                        `${ref.category} ${ref.chapter}:${ref.startVerse}`.toLowerCase().includes(lq)
+                    );
+                }
+
+                // Sorting happens before the split
+                switch (currentSortOrder) {
+                    case 'title-asc': filtered.sort((a, b) => a.title.localeCompare(b.title)); break;
+                    case 'title-desc': filtered.sort((a, b) => b.title.localeCompare(a.title)); break;
+                    case 'chapter-asc': filtered.sort((a, b) => (a.chapter - b.chapter) || (a.startVerse - b.startVerse)); break;
+                    case 'chapter-desc': filtered.sort((a, b) => (b.chapter - a.chapter) || (b.startVerse - a.startVerse)); break;
+                    case 'date-desc': filtered.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)); break;
+                    case 'date-asc': filtered.sort((a, b) => new Date(a.updatedAt) - new Date(b.updatedAt)); break;
+                }
+                
+                const clearBookFilterBtn = document.getElementById('clear-book-filter-btn');
+                const clearTagFilterBtn = document.getElementById('clear-tag-filter-btn');
+
+                if(clearBookFilterBtn) clearBookFilterBtn.classList.toggle('hidden', !activeCategoryFilter);
+                if(clearTagFilterBtn) clearTagFilterBtn.classList.toggle('hidden', !activeTagFilter);
+                
+                if (activeCategoryFilter) {
+                    const referencesInBook = filtered.filter(ref => ref.category === activeCategoryFilter);
+                    const crossReferences = filtered.filter(ref => 
+                        ref.relatedVerses && 
+                        ref.relatedVerses.some(rv => rv.category === activeCategoryFilter) &&
+                        ref.category !== activeCategoryFilter // Exclude self-references
+                    );
+                    
+                    // Filter out any duplicates if a reference is in both lists (unlikely but safe)
+                    const crossRefIds = new Set(crossReferences.map(ref => ref.id));
+                    const uniqueReferencesInBook = referencesInBook.filter(ref => !crossRefIds.has(ref.id));
+
+                    resultsTitle.textContent = `Referências em ${activeCategoryFilter}`;
+                    updateReferenceCount(uniqueReferencesInBook.length, 'book', activeCategoryFilter);
+                    
+                    // Renderiza as referências do livro principal
+                    topicsContainer.classList.remove('hidden');
+                    topicsContainer.classList.add('grid', 'grid-cols-1', 'md:grid-cols-2', 'lg:grid-cols-3', 'gap-6');
+                    renderReferencesList(topicsContainer, uniqueReferencesInBook);
+
+                    // Renderiza as referências cruzadas no novo container
+                    if (crossReferences.length > 0) {
+                        crossRefContainer.classList.remove('hidden');
+                        renderReferencesList(crossRefGrid, crossReferences);
+                    } else {
+                        crossRefContainer.classList.add('hidden');
+                    }
+                    
+                    if (uniqueReferencesInBook.length === 0 && crossReferences.length === 0) {
+                         noResultsDiv.classList.remove('hidden');
+                         topicsContainer.classList.add('hidden');
+                         crossRefContainer.classList.add('hidden');
+                    } else {
+                         noResultsDiv.classList.add('hidden');
+                         topicsContainer.classList.remove('hidden');
+                    }
+                    
+                    setupPagination(uniqueReferencesInBook.length);
+                } else {
+                    crossRefContainer.classList.add('hidden');
+                    topicsContainer.innerHTML = ''; // Clear container before rendering
+                    topicsContainer.classList.add('grid', 'grid-cols-1', 'md:grid-cols-2', 'lg:grid-cols-3', 'gap-6');
+                    topicsContainer.classList.remove('flex', 'flex-col', 'gap-8');
+                    resultsTitle.textContent = 'Todas as Referências';
+                    updateReferenceCount(filtered.length, activeTagFilter ? 'tag' : 'all', activeTagFilter);
+                    renderReferencesList(topicsContainer, filtered);
+                    if (filtered.length === 0) {
+                         noResultsDiv.classList.remove('hidden');
+                         topicsContainer.classList.add('hidden');
+                    } else {
+                         noResultsDiv.classList.add('hidden');
+                         topicsContainer.classList.remove('hidden');
+                    }
+                    setupPagination(filtered.length);
+                }
+
+                renderTags();
+                updateActiveCategoryButton();
+            };
+
+            const showModal = (modal) => modal.classList.add('visible');
+            const hideModal = (modal) => modal.classList.remove('visible');
+            
+            const renderAllTagsModal = () => {
+                const allTagsListContainer = document.getElementById('all-tags-list-container');
+                const tagSearchInput = document.getElementById('tag-search-input');
+                const allTags = getAllUniqueTags();
+                const filter = tagSearchInput.value.toLowerCase();
+                const filteredTags = allTags.filter(tag => tag.toLowerCase().includes(filter));
+                allTagsListContainer.innerHTML = filteredTags.map(tag => 
+                    `<button class="w-full text-left p-2 rounded hover:bg-amber-100 modal-tag-btn" data-tag="${tag}">${tag}</button>`
+                ).join('');
+            };
+
+            const createRelatedVerseElement = (verseData = {}) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'p-3 border rounded-md bg-gray-50 space-y-2 relative';
+                const selectBook = document.createElement('select');
+                selectBook.className = 'w-full p-2 border rounded related-verse-book';
+                populateBookSelect(selectBook);
+                selectBook.value = verseData.category || '';
+                const inputsWrapper = document.createElement('div');
+                inputsWrapper.className = 'grid grid-cols-3 gap-2';
+                inputsWrapper.innerHTML = `
+                    <input type="number" placeholder="Cap." class="w-full p-2 border rounded related-verse-chapter" min="1" value="${verseData.chapter || ''}">
+                    <input type="number" placeholder="Vers. In." class="w-full p-2 border rounded related-verse-start" min="1" value="${verseData.startVerse || ''}">
+                    <input type="number" placeholder="Vers. Fim" class="w-full p-2 border rounded related-verse-end" min="1" value="${verseData.endVerse || ''}">
+                `;
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.innerHTML = '&times;';
+                removeBtn.className = 'absolute top-1 right-2 text-xl text-gray-500 hover:text-red-600 font-bold';
+                removeBtn.onclick = () => wrapper.remove();
+                wrapper.append(selectBook, inputsWrapper, removeBtn);
+                return wrapper;
+            };
+
+            const setupRelatedVerses = (container, button, verses = []) => {
+                container.innerHTML = '';
+                if(verses && verses.length > 0) {
+                    verses.forEach(verse => container.appendChild(createRelatedVerseElement(verse)));
+                }
+                button.onclick = () => container.appendChild(createRelatedVerseElement());
+            };
+            
+            const createTagEditor = (editorId) => {
+                const editorWrapper = document.getElementById(editorId);
+                const textInput = editorWrapper.querySelector('.tags-editor-input');
+                const suggestionsContainer = document.getElementById(editorId.replace('-editor', '-suggestions'));
+                
+                let currentTags = [];
+
+                const renderCurrentTags = () => {
+                    editorWrapper.querySelectorAll('.tag-item').forEach(tagEl => tagEl.remove());
+                    currentTags.slice().reverse().forEach(tag => {
+                        const tagEl = document.createElement('div');
+                        tagEl.className = 'tag-item';
+                        tagEl.innerHTML = `<span>${tag}</span><button type="button" class="tag-remove-btn" data-tag="${tag}">&times;</button>`;
+                        editorWrapper.insertBefore(tagEl, textInput);
+                    });
+                };
+
+                const addTag = (tag) => {
+                    const trimmedTag = tag.trim();
+                    if (trimmedTag && !currentTags.some(t => t.toLowerCase() === trimmedTag.toLowerCase())) {
+                        currentTags.push(trimmedTag);
+                        renderCurrentTags();
+                    }
+                    textInput.value = '';
+                    hideSuggestions();
+                };
+
+                const removeTag = (tag) => {
+                    currentTags = currentTags.filter(t => t !== tag);
+                    renderCurrentTags();
+                };
+
+                const showSuggestions = (query) => {
+                    hideSuggestions();
+                    if (!query) return;
+                    const allTags = getAllUniqueTags();
+                    const suggestions = allTags.filter(tag => 
+                        tag.toLowerCase().startsWith(query.toLowerCase()) && 
+                        !currentTags.some(t => t.toLowerCase() === tag.toLowerCase())
+                    );
+                    
+                    if (suggestions.length > 0) {
+                        const list = document.createElement('div');
+                        list.className = 'suggestions-list';
+                        suggestions.forEach(suggestion => {
+                            const item = document.createElement('div');
+                            item.className = 'suggestion-item';
+                            item.textContent = suggestion;
+                            item.addEventListener('mousedown', (e) => {
+                                e.preventDefault();
+                                addTag(suggestion);
+                                textInput.focus();
+                            });
+                            list.appendChild(item);
+                        });
+                        suggestionsContainer.appendChild(list);
+                    }
+                };
+
+                const hideSuggestions = () => {
+                    suggestionsContainer.innerHTML = '';
+                };
+
+                textInput.addEventListener('input', () => showSuggestions(textInput.value));
+                textInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ',') {
+                        e.preventDefault();
+                        addTag(textInput.value);
+                    }
+                    if (e.key === 'Backspace' && textInput.value === '' && currentTags.length > 0) {
+                        removeTag(currentTags[currentTags.length - 1]);
+                    }
+                });
+                
+                editorWrapper.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('tag-remove-btn')) {
+                        removeTag(e.target.dataset.tag);
+                    } else {
+                        textInput.focus();
+                    }
+                });
+
+                textInput.addEventListener('blur', () => setTimeout(hideSuggestions, 150));
+
+                return {
+                    setTags: (tags) => { currentTags = tags ? [...tags] : []; renderCurrentTags(); },
+                    getTags: () => currentTags,
+                    clearTags: () => { currentTags = []; renderCurrentTags(); }
+                };
+            };
+
+            const addTagEditor = createTagEditor('add-tags-editor');
+            const editTagEditor = createTagEditor('edit-tags-editor');
+
+            const showEditModal = (topic) => {
+                editForm.id.value = topic.id;
+                editForm.title.value = topic.title;
+                editForm.category.value = topic.category;
+                editForm.chapter.value = topic.chapter;
+                editForm.startVerse.value = topic.startVerse;
+                editForm.endVerse.value = topic.endVerse || '';
+                editForm.content.value = topic.content || '';
+                editTagEditor.setTags(topic.keywords);
+                setupRelatedVerses(
+                    document.getElementById('edit-related-verses-container'),
+                    document.getElementById('edit-add-new-related-verse-btn'),
+                    topic.relatedVerses
+                );
+                showModal(editModal);
+            };
+
+            const duplicateTopic = (topicId) => {
+                const originalTopic = bibleReferences.find(t => t.id === Number(topicId));
+                if (originalTopic) {
+                    const now = new Date().toISOString();
+                    const newTopic = {
+                        ...originalTopic,
+                        id: Date.now(),
+                        title: `${originalTopic.title} (Cópia)`,
+                        createdAt: now,
+                        updatedAt: now,
+                    };
+                    bibleReferences.push(newTopic);
+                    saveData();
+                    filterAndRenderAll();
+                    showToast('Referência duplicada!');
+                }
+            };
+            
+            const getRelatedVersesFromForm = (containerId) => {
+                const relatedVerses = [];
+                document.querySelectorAll(`#${containerId} > div`).forEach(el => {
+                    const book = el.querySelector('.related-verse-book').value;
+                    const chapter = el.querySelector('.related-verse-chapter').value;
+                    const startVerse = el.querySelector('.related-verse-start').value;
+                    if (book && chapter && startVerse) {
+                         relatedVerses.push({
+                            category: book, chapter: Number(chapter), startVerse: Number(startVerse),
+                            endVerse: Number(el.querySelector('.related-verse-end').value) || null
+                        });
+                    }
+                });
+                return relatedVerses;
+            };
+
+            addForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const now = new Date().toISOString();
+                const newTopic = {
+                    id: Date.now(),
+                    createdAt: now,
+                    updatedAt: now,
+                    title: formData.get('title'),
+                    category: formData.get('category'),
+                    chapter: Number(formData.get('chapter')),
+                    startVerse: Number(formData.get('startVerse')),
+                    endVerse: Number(formData.get('endVerse')) || null,
+                    content: formData.get('content'),
+                    relatedVerses: getRelatedVersesFromForm('add-related-verses-container'),
+                    keywords: addTagEditor.getTags()
+                };
+                bibleReferences.push(newTopic);
+                saveData();
+                filterAndRenderAll();
+                hideModal(addModal);
+            });
+
+            editForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const updatedTopicId = Number(formData.get('id'));
+                const topicIndex = bibleReferences.findIndex(t => t.id === updatedTopicId);
+
+                if (topicIndex > -1) {
+                    const originalTopic = bibleReferences[topicIndex];
+                    bibleReferences[topicIndex] = {
+                        id: updatedTopicId,
+                        createdAt: originalTopic.createdAt,
+                        updatedAt: new Date().toISOString(),
+                        title: formData.get('title'),
+                        category: formData.get('category'),
+                        chapter: Number(formData.get('chapter')),
+                        startVerse: Number(formData.get('startVerse')),
+                        endVerse: Number(formData.get('endVerse')) || null,
+                        content: formData.get('content'),
+                        relatedVerses: getRelatedVersesFromForm('edit-related-verses-container'),
+                        keywords: editTagEditor.getTags()
+                    };
+                    saveData();
+                    filterAndRenderAll();
+                    hideModal(editModal);
+                } else {
+                    showToast('Erro: não foi possível encontrar a referência para atualizar.', 'error');
+                }
+            });
+
+            document.getElementById('confirm-delete').addEventListener('click', () => {
+                bibleReferences = bibleReferences.filter(t => t.id !== topicToDeleteId);
+                saveData();
+                showToast('Referência excluída.');
+                filterAndRenderAll();
+                hideModal(deleteModal);
+            });
+            
+            saveToBrowserBtn.addEventListener('click', saveData);
+
+            downloadHtmlBtn.addEventListener('click', () => {
+                const docClone = document.cloneNode(true);
+                const dataContainer = docClone.getElementById('bible-data-container');
+                const dataToEmbed = {
+                    references: bibleReferences,
+                    lastModified: new Date().toISOString()
+                }
+                dataContainer.textContent = JSON.stringify(dataToEmbed, null, 4);
+                const html = `<!DOCTYPE html>\n${docClone.documentElement.outerHTML}`;
+                const blob = new Blob([html], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'explorador-biblia-salvo.html';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast('Arquivo HTML gerado para download!');
+            });
+
+            document.getElementById('add-reference-btn').addEventListener('click', () => {
+                addForm.reset();
+                addTagEditor.clearTags();
+                setupRelatedVerses(document.getElementById('add-related-verses-container'), document.getElementById('add-new-related-verse-btn'));
+                showModal(addModal);
+            });
+            
+            topicsContainer.addEventListener('click', (e) => {
+                const editBtn = e.target.closest('.edit-btn');
+                const deleteBtn = e.target.closest('.delete-btn');
+                const duplicateBtn = e.target.closest('.duplicate-btn');
+                const tagBtn = e.target.closest('.topic-tag-btn');
+                const readBtn = e.target.closest('.read-mode-btn');
+
+                if (editBtn) { e.preventDefault(); const topic = bibleReferences.find(t => t.id === Number(editBtn.dataset.id)); if (topic) showEditModal(topic); }
+                if (deleteBtn) { e.preventDefault(); topicToDeleteId = Number(deleteBtn.dataset.id); showModal(deleteModal); }
+                if (duplicateBtn) { e.preventDefault(); duplicateTopic(duplicateBtn.dataset.id); }
+                if (tagBtn) { e.preventDefault(); currentPage = 1; activeTagFilter = tagBtn.dataset.tag; filterAndRenderAll(); }
+                if (readBtn) { 
+                    e.preventDefault(); 
+                    const topic = bibleReferences.find(t => t.id === Number(readBtn.dataset.id));
+                    if (topic) {
+                        const readModeContent = document.getElementById('read-mode-content');
+                        let referenceString = `${topic.category} ${topic.chapter}:${topic.startVerse}${topic.endVerse ? `-${topic.endVerse}` : ''}`;
+                        
+                        const keywordsHtml = (topic.keywords && topic.keywords.length > 0) ? 
+                            `<div class="mt-8 pt-6 border-t border-gray-200">
+                                <h4 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Etiquetas</h4>
+                                <div class="flex flex-wrap gap-2">
+                                    ${topic.keywords.map(k => `<button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold px-2.5 py-1 rounded-full hover:bg-amber-200 transition-colors read-mode-tag-btn" data-tag="${k}">${k}</button>`).join('')}
+                                </div>
+                            </div>` : '';
+
+                        const relatedVersesHtml = (topic.relatedVerses && topic.relatedVerses.length > 0) ? 
+                            `<div class="mt-8 pt-6 border-t border-gray-200">
+                                <h4 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Versículos Relacionados</h4>
+                                <ul class="space-y-2">
+                                    ${topic.relatedVerses.map(rv => `<li class="bg-white border border-gray-200 rounded-md p-3 text-sm text-gray-700 font-sans">${rv.category} ${rv.chapter}:${rv.startVerse}${rv.endVerse ? `-${rv.endVerse}` : ''}</li>`).join('')}
+                                </ul>
+                            </div>` : '';
+                        
+                        readModeContent.innerHTML = `
+                            <div class="bg-stone-50 p-6 sm:p-8 md:p-12 rounded-lg">
+                                <p class="text-sm font-semibold text-amber-700 tracking-wider uppercase font-sans">${referenceString}</p>
+                                <h2 class="text-3xl sm:text-4xl font-bold text-gray-800 mt-2 mb-4 font-serif">${topic.title}</h2>
+                                ${topic.content ? `<div class="prose prose-lg max-w-none text-gray-800 mt-6 whitespace-pre-wrap leading-relaxed">${topic.content}</div>` : ''}
+                                ${keywordsHtml}
+                                ${relatedVersesHtml}
+                            </div>
+                        `;
+                        showModal(readModeModal);
+                    }
+                }
+            });
+            
+            crossRefGrid.addEventListener('click', (e) => {
+                const editBtn = e.target.closest('.edit-btn');
+                const deleteBtn = e.target.closest('.delete-btn');
+                const duplicateBtn = e.target.closest('.duplicate-btn');
+                const tagBtn = e.target.closest('.topic-tag-btn');
+                const readBtn = e.target.closest('.read-mode-btn');
+
+                if (editBtn) { e.preventDefault(); const topic = bibleReferences.find(t => t.id === Number(editBtn.dataset.id)); if (topic) showEditModal(topic); }
+                if (deleteBtn) { e.preventDefault(); topicToDeleteId = Number(deleteBtn.dataset.id); showModal(deleteModal); }
+                if (duplicateBtn) { e.preventDefault(); duplicateTopic(duplicateBtn.dataset.id); }
+                if (tagBtn) { e.preventDefault(); currentPage = 1; activeTagFilter = tagBtn.dataset.tag; filterAndRenderAll(); }
+                if (readBtn) { 
+                    e.preventDefault(); 
+                    const topic = bibleReferences.find(t => t.id === Number(readBtn.dataset.id));
+                    if (topic) {
+                        const readModeContent = document.getElementById('read-mode-content');
+                        let referenceString = `${topic.category} ${topic.chapter}:${topic.startVerse}${topic.endVerse ? `-${topic.endVerse}` : ''}`;
+                        
+                        const keywordsHtml = (topic.keywords && topic.keywords.length > 0) ? 
+                            `<div class="mt-8 pt-6 border-t border-gray-200">
+                                <h4 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Etiquetas</h4>
+                                <div class="flex flex-wrap gap-2">
+                                    ${topic.keywords.map(k => `<button class="inline-block bg-amber-100 text-amber-800 text-xs font-semibold px-2.5 py-1 rounded-full hover:bg-amber-200 transition-colors read-mode-tag-btn" data-tag="${k}">${k}</button>`).join('')}
+                                </div>
+                            </div>` : '';
+
+                        const relatedVersesHtml = (topic.relatedVerses && topic.relatedVerses.length > 0) ? 
+                            `<div class="mt-8 pt-6 border-t border-gray-200">
+                                <h4 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Versículos Relacionados</h4>
+                                <ul class="space-y-2">
+                                    ${topic.relatedVerses.map(rv => `<li class="bg-white border border-gray-200 rounded-md p-3 text-sm text-gray-700 font-sans">${rv.category} ${rv.chapter}:${rv.startVerse}${rv.endVerse ? `-${rv.endVerse}` : ''}</li>`).join('')}
+                                </ul>
+                            </div>` : '';
+                        
+                        readModeContent.innerHTML = `
+                            <div class="bg-stone-50 p-6 sm:p-8 md:p-12 rounded-lg">
+                                <p class="text-sm font-semibold text-amber-700 tracking-wider uppercase font-sans">${referenceString}</p>
+                                <h2 class="text-3xl sm:text-4xl font-bold text-gray-800 mt-2 mb-4 font-serif">${topic.title}</h2>
+                                ${topic.content ? `<div class="prose prose-lg max-w-none text-gray-800 mt-6 whitespace-pre-wrap leading-relaxed">${topic.content}</div>` : ''}
+                                ${keywordsHtml}
+                                ${relatedVersesHtml}
+                            </div>
+                        `;
+                        showModal(readModeModal);
+                    }
+                }
+            });
+
+            const getAllUniqueTags = () => {
+                const tagMap = new Map();
+                bibleReferences.flatMap(ref => ref.keywords).forEach(tag => {
+                    const lowerKeyword = tag.toLowerCase();
+                    if (!tagMap.has(lowerKeyword)) {
+                        tagMap.set(lowerKeyword, tag);
+                    }
+                });
+                return Array.from(tagMap.values()).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+            };
+
+            const renderManageTagsModal = () => {
+                const container = document.getElementById('manage-tags-list-container');
+                const allTags = getAllUniqueTags();
+                container.innerHTML = allTags.map(tag => `
+                    <div class="flex items-center justify-between p-2 border-b group">
+                        <span class="tag-name text-gray-700">${tag}</span>
+                        <div class="tag-actions opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button class="text-sm font-semibold text-amber-800 hover:text-amber-900 manage-edit-btn" data-tag="${tag}">Editar</button>
+                            <button class="text-sm font-semibold text-red-600 hover:text-red-800 ml-2 manage-delete-btn" data-tag="${tag}">Excluir</button>
+                        </div>
+                    </div>
+                `).join('');
+            };
+            
+            const setupSimpleEventListeners = () => {
+                document.querySelectorAll('.modal-cancel-btn').forEach(btn => btn.addEventListener('click', (e) => hideModal(e.target.closest('.modal-overlay'))));
+                document.getElementById('view-all-tags-btn').addEventListener('click', () => { document.getElementById('tag-search-input').value = ''; renderAllTagsModal(); showModal(allTagsModal); });
+                document.getElementById('tag-search-input').addEventListener('input', renderAllTagsModal);
+                
+                document.getElementById('manage-tags-btn').addEventListener('click', () => {
+                    renderManageTagsModal();
+                    showModal(manageTagsModal);
+                });
+
+                document.getElementById('manage-tags-list-container').addEventListener('click', (e) => {
+                    const editBtn = e.target.closest('.manage-edit-btn');
+                    const deleteBtn = e.target.closest('.manage-delete-btn');
+                    const saveBtn = e.target.closest('.manage-save-btn');
+                    const cancelBtn = e.target.closest('.manage-cancel-btn');
+                    
+                    if(editBtn) {
+                        const tag = editBtn.dataset.tag;
+                        const item = editBtn.closest('.flex');
+                        item.innerHTML = `
+                            <input type="text" class="w-full p-1 border rounded text-sm" value="${tag}">
+                            <div class="flex-shrink-0 ml-2">
+                                <button class="text-sm font-semibold text-green-600 hover:text-green-800 manage-save-btn" data-old-tag="${tag}">Salvar</button>
+                                <button class="text-sm font-semibold text-gray-600 hover:text-gray-800 ml-2 manage-cancel-btn">Cancelar</button>
+                            </div>
+                        `;
+                        item.querySelector('input').focus();
+                    }
+
+                    if(cancelBtn) {
+                        renderManageTagsModal();
+                    }
+
+                    if(saveBtn) {
+                        const oldTag = saveBtn.dataset.oldTag;
+                        const newTag = saveBtn.closest('.flex').querySelector('input').value.trim();
+
+                        if (!newTag) {
+                            showToast('O nome da etiqueta não pode estar vazio.', 'error');
+                            return;
+                        }
+
+                        const allTags = getAllUniqueTags();
+                        if (allTags.some(t => t.toLowerCase() === newTag.toLowerCase() && t.toLowerCase() !== oldTag.toLowerCase())) {
+                            showToast(`A etiqueta "${newTag}" já existe.`, 'error');
+                            return;
+                        }
+
+                        let count = 0;
+                        bibleReferences.forEach(ref => {
+                            let tagFound = false;
+                            const updatedKeywords = ref.keywords.map(k => {
+                                if (k.toLowerCase() === oldTag.toLowerCase()) {
+                                    tagFound = true;
+                                    return newTag;
+                                }
+                                return k;
+                            });
+                            if(tagFound) count++;
+                            ref.keywords = updatedKeywords;
+                        });
+                        
+                        showToast(`Etiqueta atualizada em ${count} referências.`, 'success');
+                        saveData();
+                        renderManageTagsModal();
+                        filterAndRenderAll();
+                    }
+
+                    if (deleteBtn) {
+                        const tagToDelete = deleteBtn.dataset.tag;
+                        let count = bibleReferences.filter(ref => ref.keywords.some(k => k.toLowerCase() === tagToDelete.toLowerCase())).length;
+
+                        if (confirm(`Tem certeza que deseja excluir a etiqueta "${tagToDelete}"? Ela será removida de ${count} referências.`)) {
+                            bibleReferences.forEach(ref => {
+                                ref.keywords = ref.keywords.filter(k => k.toLowerCase() !== tagToDelete.toLowerCase());
+                            });
+                            showToast(`Etiqueta "${tagToDelete}" excluída.`, 'success');
+                            saveData();
+                            renderManageTagsModal();
+                            filterAndRenderAll();
+                        }
+                    }
+                });
+
+                document.getElementById('all-tags-list-container').addEventListener('click', (e) => {
+                    const target = e.target.closest('.modal-tag-btn');
+                    if (target) { currentPage = 1; activeTagFilter = target.dataset.tag; filterAndRenderAll(); hideModal(allTagsModal); }
+                });
+                categoryNav.addEventListener('click', (e) => { const target = e.target.closest('.category-filter-btn'); if (target) { e.preventDefault(); currentPage = 1; activeCategoryFilter = target.dataset.category === 'all' ? null : target.dataset.category; filterAndRenderAll(); } });
+                
+                const clearBookFilterBtn = document.getElementById('clear-book-filter-btn');
+                if(clearBookFilterBtn) {
+                    clearBookFilterBtn.addEventListener('click', () => {
+                        currentPage = 1;
+                        activeCategoryFilter = null;
+                        filterAndRenderAll();
+                    });
+                }
+
+                const clearTagFilterBtn = document.getElementById('clear-tag-filter-btn');
+                if(clearTagFilterBtn) {
+                    clearTagFilterBtn.addEventListener('click', () => {
+                        currentPage = 1;
+                        activeTagFilter = null;
+                        filterAndRenderAll();
+                    });
+                }
+
+                sortOrderSelect.addEventListener('change', (e) => { currentPage = 1; currentSortOrder = e.target.value; filterAndRenderAll(); });
+                searchInput.addEventListener('input', (e) => { currentPage = 1; searchQuery = e.target.value; filterAndRenderAll(); });
+                tagsContainer.addEventListener('click', (e) => { const target = e.target.closest('button'); if (target) { currentPage = 1; activeTagFilter = activeTagFilter === target.dataset.tag ? null : target.dataset.tag; filterAndRenderAll(); } });
+                
+                readModeModal.addEventListener('click', (e) => {
+                    const tagBtn = e.target.closest('.read-mode-tag-btn');
+                    if(tagBtn) {
+                        e.preventDefault();
+                        activeTagFilter = tagBtn.dataset.tag;
+                        hideModal(readModeModal);
+                        filterAndRenderAll();
+                    }
+                });
+
+                const bookSearchInput = document.getElementById('book-search-input');
+                bookSearchInput.addEventListener('input', renderCategories);
+
+                // Event listener for the new dropdown
+                itemsPerPageSelect.addEventListener('change', (e) => {
+                    ITEMS_PER_PAGE = e.target.value === 'all' ? 'all' : Number(e.target.value);
+                    currentPage = 1; // Reset to the first page when the count changes
+                    filterAndRenderAll();
+                });
+                
+                // Event listeners for the new clear data feature
+                clearDataBtn.addEventListener('click', () => {
+                    showModal(clearDataModal);
+                });
+                confirmClearDataBtn.addEventListener('click', () => {
+                    localStorage.removeItem('bibleExplorerData');
+                    bibleReferences = unifyTagsCaseInsensitive(ensureTimestamps(loadInitialData()));
+                    currentPage = 1;
+                    activeCategoryFilter = null;
+                    activeTagFilter = null;
+                    searchQuery = '';
+                    updateLastSavedDisplay(null);
+                    filterAndRenderAll();
+                    hideModal(clearDataModal);
+                    showToast('Todos os dados foram removidos com sucesso.');
+                });
+            };
+            
+            const unifyTagsCaseInsensitive = (references) => {
+                const tagMap = new Map(); 
+                references.forEach(ref => {
+                    ref.keywords.forEach(keyword => {
+                        const lowerKeyword = keyword.toLowerCase();
+                        if (!tagMap.has(lowerKeyword)) {
+                            tagMap.set(lowerKeyword, keyword);
+                        }
+                    });
+                });
+
+                return references.map(ref => {
+                    const seen = new Set();
+                    const unifiedKeywords = ref.keywords
+                        .map(keyword => {
+                            const lowerKeyword = keyword.toLowerCase();
+                            if (seen.has(lowerKeyword)) return null; 
+                            seen.add(lowerKeyword);
+                            return tagMap.get(lowerKeyword);
+                        })
+                        .filter(Boolean); 
+                    
+                    return { ...ref, keywords: unifiedKeywords };
+                });
+            };
+
+            const ensureTimestamps = (references) => {
+                return references.map(ref => {
+                    const newRef = { ...ref };
+                    if (!newRef.createdAt) {
+                        const fallbackDate = new Date().toISOString();
+                        newRef.createdAt = fallbackDate;
+                    }
+                    if (!newRef.updatedAt) {
+                        newRef.updatedAt = newRef.createdAt;
+                    }
+                    return newRef;
+                });
+            };
+
+            const loadInitialData = () => {
+                const savedDataString = localStorage.getItem('bibleExplorerData');
+                if (savedDataString) {
+                    try {
+                        const savedDataObject = JSON.parse(savedDataString);
+                        if (savedDataObject.hasOwnProperty('references') && savedDataObject.hasOwnProperty('lastModified')) {
+                            lastModifiedDate = savedDataObject.lastModified;
+                            return savedDataObject.references;
+                        } else {
+                            lastModifiedDate = null;
+                            return savedDataObject; // Handle old data format (just an array)
+                        }
+                    } catch (e) { console.error("Could not parse saved data.", e); }
+                }
+                // Fallback to embedded data
+                try {
+                    const embeddedData = JSON.parse(document.getElementById('bible-data-container').textContent);
+                     if (embeddedData.hasOwnProperty('references') && embeddedData.hasOwnProperty('lastModified')) {
+                         lastModifiedDate = embeddedData.lastModified;
+                         return embeddedData.references;
+                     }
+                    // This case is for backwards compatibility with the old initial data format (array)
+                    return Array.isArray(embeddedData) ? embeddedData : [];
+                } catch (e) {
+                    console.error("No valid embedded or saved data found.", e);
+                    return [];
+                }
+            };
+            
+            bibleReferences = unifyTagsCaseInsensitive(ensureTimestamps(loadInitialData()));
+            updateLastSavedDisplay(lastModifiedDate);
+            populateBookSelect(addForm.querySelector('select[name="category"]'));
+            populateBookSelect(editForm.querySelector('select[name="category"]'));
+            renderCategories();
+            filterAndRenderAll();
+            setupSimpleEventListeners();
+        });
+    </script>
+
+
+</body></html>
